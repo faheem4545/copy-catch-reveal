@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
@@ -16,6 +15,12 @@ const ForgotPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  
+  const baseUrl = isLocalhost
+    ? window.location.origin
+    : "https://eb502613-5d35-4ef4-99d1-a7993f78e4f4.lovableproject.com";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,11 +29,10 @@ const ForgotPassword = () => {
     setSuccess(false);
     
     try {
-      // Get the current URL origin to use as the base for the redirect URL
-      const origin = window.location.origin;
+      console.log(`Using redirect URL: ${baseUrl}/reset-password`);
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${origin}/reset-password`,
+        redirectTo: `${baseUrl}/reset-password`,
       });
 
       if (error) {
