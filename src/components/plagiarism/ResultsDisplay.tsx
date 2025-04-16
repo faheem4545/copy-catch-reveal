@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,7 +8,8 @@ import {
   Filter, 
   Download,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -47,6 +47,7 @@ interface ResultsDisplayProps {
   similarityScore: number;
   sources: Source[];
   highlightedText: React.ReactNode;
+  isSearchingSources?: boolean;
 }
 
 const ResultsDisplay = ({
@@ -54,6 +55,7 @@ const ResultsDisplay = ({
   similarityScore,
   sources,
   highlightedText,
+  isSearchingSources = false,
 }: ResultsDisplayProps) => {
   const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Record<number, "positive" | "negative" | null>>({});
@@ -64,7 +66,6 @@ const ResultsDisplay = ({
     unknown: true,
   });
 
-  // Calculate color based on similarity score
   const getScoreColor = () => {
     if (similarityScore < 20) return "text-green-600";
     if (similarityScore < 50) return "text-yellow-600";
@@ -77,7 +78,6 @@ const ResultsDisplay = ({
   };
 
   const handleDownloadReport = () => {
-    // In a real app, this would generate and download a PDF report
     toast.success("Report downloaded successfully");
   };
 
@@ -131,7 +131,12 @@ const ResultsDisplay = ({
         <Tabs defaultValue="highlighted" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="highlighted">Highlighted Text</TabsTrigger>
-            <TabsTrigger value="sources">Sources ({sources.length})</TabsTrigger>
+            <TabsTrigger value="sources">
+              Sources ({sources.length})
+              {isSearchingSources && (
+                <Loader2 size={14} className="ml-2 animate-spin" />
+              )}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="highlighted" className="mt-4">
             <div className="bg-white p-4 rounded-md border min-h-[300px] max-h-[500px] overflow-auto">
@@ -152,7 +157,14 @@ const ResultsDisplay = ({
                   </Button>
                 ) : (
                   <h3 className="text-sm font-medium text-gray-500">
-                    {sortedSources.length} sources found
+                    {isSearchingSources ? (
+                      <span className="flex items-center">
+                        Searching for matching sources
+                        <Loader2 size={14} className="ml-2 animate-spin" />
+                      </span>
+                    ) : (
+                      `${sortedSources.length} sources found`
+                    )}
                   </h3>
                 )}
               </div>
@@ -203,9 +215,13 @@ const ResultsDisplay = ({
             </div>
             
             <div className="bg-white rounded-md border divide-y">
-              {sortedSources.length > 0 ? (
+              {isSearchingSources && sortedSources.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Loader2 size={24} className="mx-auto mb-2 animate-spin text-purple-600" />
+                  <p className="text-gray-600">Searching for matching sources...</p>
+                </div>
+              ) : sortedSources.length > 0 ? (
                 activeSourceId !== null ? (
-                  // Detailed source view
                   <div className="p-5">
                     <div className="mb-6">
                       <h3 className="font-medium text-lg text-gray-900 mb-1">{sources[activeSourceId].title}</h3>
@@ -278,7 +294,6 @@ const ResultsDisplay = ({
                     </div>
                   </div>
                 ) : (
-                  // Source list view
                   sortedSources.map((source, index) => (
                     <div 
                       key={index} 

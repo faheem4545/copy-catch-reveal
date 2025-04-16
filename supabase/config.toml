@@ -1,1 +1,5 @@
-project_id = "qjczhbllpzkkstustvbn"
+
+project_id = "lovable"
+
+[functions.search-sources]
+verify_jwt = true
