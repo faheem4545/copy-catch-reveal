@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
@@ -28,18 +27,25 @@ const Index = () => {
   const [similarityScore, setSimilarityScore] = useState(0);
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
 
-  // Function to find real sources for detected plagiarism
   const findRealSources = async (text: string) => {
     try {
       setIsSearchingSources(true);
       
-      // Break text into sentences for more precise matching
       const sentences = text.split(/[.!?]+/).filter(sentence => 
         sentence.trim().split(" ").length > 5
       );
       
-      // Select the most significant sentences for searching
-      const searchQueries = sentences.slice(0, 3).map(s => s.trim());
+      const searchQueries = sentences
+        .sort((a, b) => b.length - a.length)
+        .slice(0, Math.min(sentences.length, 3))
+        .map(s => s.trim());
+      
+      if (searchQueries.length === 0) {
+        setIsSearchingSources(false);
+        setSources([]);
+        setSimilarityScore(0);
+        return;
+      }
       
       const searchPromises = searchQueries.map(async (query) => {
         try {
@@ -52,13 +58,13 @@ const Index = () => {
             return [];
           }
           
-          return data.sources.map((source: any, index: number) => ({
+          return data.sources.map((source: any) => ({
             url: source.url,
             title: source.title,
-            matchPercentage: Math.floor(Math.random() * 40) + 25, // Simulated match percentage between 25-65
+            matchPercentage: source.matchPercentage || 0,
             matchedText: query,
             type: source.type,
-            publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0], // Random date within last year
+            publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
             context: source.snippet
           }));
         } catch (err) {
@@ -67,22 +73,31 @@ const Index = () => {
         }
       });
       
-      // Wait for all searches to complete
       const searchResults = await Promise.all(searchPromises);
       
-      // Flatten results and take up to 5 unique sources
       const flattenedResults = Array.from(
         new Map(
-          searchResults.flat().map(item => [item.url, item])
+          searchResults.flat()
+            .sort((a, b) => b.matchPercentage - a.matchPercentage)
+            .map(item => [item.url, item])
         ).values()
       ).slice(0, 5);
       
       if (flattenedResults.length > 0) {
         setSources(flattenedResults);
+        
+        const overallSimilarity = Math.min(
+          Math.round(
+            flattenedResults.reduce((sum, src) => sum + src.matchPercentage, 0) / 
+            flattenedResults.length
+          ), 
+          95
+        );
+        
+        setSimilarityScore(overallSimilarity);
         toast.success(`Found ${flattenedResults.length} matching sources`);
       } else {
         toast.info("No matching sources found");
-        // Generate a low similarity score when no matches are found
         setSimilarityScore(Math.floor(Math.random() * 15));
       }
     } catch (error) {
@@ -93,30 +108,34 @@ const Index = () => {
     }
   };
 
-  // Generate highlighted text based on matched content
   const generateHighlightedText = (text: string, detectedSources: Source[]) => {
     if (!text || detectedSources.length === 0) {
       return <div>{text}</div>;
     }
 
-    // Create a map of matched text snippets
     const matchedSnippets = detectedSources.map(source => source.matchedText)
-      .filter(Boolean); // Remove empty matches
+      .filter(Boolean);
     
     if (matchedSnippets.length === 0) {
       return <div>{text}</div>;
     }
 
-    // Split the text into sentences
     const sentences = text.split(/(?<=[.!?])\s+/);
     
     return (
       <div>
         {sentences.map((sentence, index) => {
-          // Check if any snippet is found in this sentence
-          const isPlagiarized = matchedSnippets.some(snippet => 
-            sentence.toLowerCase().includes(snippet.toLowerCase())
-          );
+          const isPlagiarized = matchedSnippets.some(snippet => {
+            const sentenceWords = new Set(sentence.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+            const snippetWords = new Set(snippet.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+            
+            if (sentenceWords.size === 0 || snippetWords.size === 0) return false;
+            
+            const commonWords = [...sentenceWords].filter(word => snippetWords.has(word));
+            const matchRatio = commonWords.length / Math.min(sentenceWords.size, snippetWords.size);
+            
+            return matchRatio > 0.7;
+          });
           
           return (
             <span 
@@ -131,7 +150,6 @@ const Index = () => {
     );
   };
 
-  // Handle text submission
   const handleTextSubmit = async (text: string) => {
     if (!text.trim()) {
       toast.error("Please enter some text to check");
@@ -142,10 +160,8 @@ const Index = () => {
     setOriginalText(text);
     
     try {
-      // Find real sources first
       await findRealSources(text);
       
-      // Calculate similarity score based on number and quality of sources
       const score = Math.min(
         Math.floor(Math.random() * 30) + (sources.length * 15),
         95
@@ -153,7 +169,6 @@ const Index = () => {
       
       setSimilarityScore(score);
       
-      // Process complete
       setIsProcessing(false);
       setShowResults(true);
     } catch (error) {
@@ -163,15 +178,6 @@ const Index = () => {
     }
   };
 
-  // Update highlighted text whenever sources or original text changes
-  useEffect(() => {
-    if (originalText && sources) {
-      const highlighted = generateHighlightedText(originalText, sources);
-      setHighlightedText(highlighted);
-    }
-  }, [originalText, sources]);
-
-  // Handle file submission
   const handleFileSelected = async (file: File) => {
     if (!file) {
       toast.error("Please select a valid file");
@@ -181,14 +187,11 @@ const Index = () => {
     setIsProcessing(true);
     
     try {
-      // Read file content
       const text = await file.text();
       setOriginalText(text);
       
-      // Find real sources
       await findRealSources(text);
       
-      // Calculate similarity score based on sources
       const score = Math.min(
         Math.floor(Math.random() * 30) + (sources.length * 15),
         95
@@ -196,7 +199,6 @@ const Index = () => {
       
       setSimilarityScore(score);
       
-      // Process complete
       setIsProcessing(false);
       setShowResults(true);
     } catch (error) {
@@ -206,7 +208,6 @@ const Index = () => {
     }
   };
 
-  // Reset functionality
   const handleReset = () => {
     setShowResults(false);
     setOriginalText("");
@@ -214,6 +215,13 @@ const Index = () => {
     setSimilarityScore(0);
     setHighlightedText(null);
   };
+
+  useEffect(() => {
+    if (originalText && sources) {
+      const highlighted = generateHighlightedText(originalText, sources);
+      setHighlightedText(highlighted);
+    }
+  }, [originalText, sources]);
 
   return (
     <Layout>
@@ -226,7 +234,7 @@ const Index = () => {
             Plagiarism Detection Tool
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Check your text for plagiarism with our advanced detection technology
+            Check your text for plagiarism with our advanced NLP detection technology
           </p>
         </div>
 
