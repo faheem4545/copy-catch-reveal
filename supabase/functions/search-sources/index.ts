@@ -46,9 +46,10 @@ Deno.serve(async (req) => {
     }
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
-    const GOOGLE_CSE_ID = Deno.env.get('GOOGLE_CSE_ID');
+    // Using the CSE ID you provided
+    const GOOGLE_CSE_ID = 'a52863c5312114c0a';
 
-    if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
+    if (!GOOGLE_API_KEY) {
       return new Response(
         JSON.stringify({ error: 'Missing API credentials' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
