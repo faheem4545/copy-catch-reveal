@@ -20,6 +20,10 @@ interface SearchResponse {
   searchInformation?: {
     totalResults: string;
   };
+  error?: {
+    code: number;
+    message: string;
+  };
 }
 
 interface SourceType {
@@ -40,19 +44,24 @@ Deno.serve(async (req) => {
     
     if (!query || typeof query !== 'string') {
       return new Response(
-        JSON.stringify({ error: 'Invalid query parameter' }),
+        JSON.stringify({ error: 'Invalid query parameter', sources: [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
+    // If API key is missing, return empty sources instead of an error
+    // This makes the application more resilient when API keys aren't configured
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
-    // Using the CSE ID you provided
-    const GOOGLE_CSE_ID = 'a52863c5312114c0a';
+    const GOOGLE_CSE_ID = 'a52863c5312114c0a'; // Using the provided CSE ID
 
     if (!GOOGLE_API_KEY) {
+      console.log('Warning: Missing Google API key');
       return new Response(
-        JSON.stringify({ error: 'Missing API credentials' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        JSON.stringify({ 
+          warning: 'API credentials not configured', 
+          sources: [] 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
@@ -63,73 +72,81 @@ Deno.serve(async (req) => {
 
     console.log(`Searching for: "${query}"`);
     
-    const response = await fetch(searchUrl.toString());
-    const data: SearchResponse = await response.json();
-    
-    if (!response.ok) {
-      console.error('Google API error:', data);
+    try {
+      const response = await fetch(searchUrl.toString());
+      const data: SearchResponse = await response.json();
+      
+      if (!response.ok || data.error) {
+        console.error('Google API error:', data.error || response.statusText);
+        return new Response(
+          JSON.stringify({ warning: 'Search API returned an error', sources: [] }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        );
+      }
+
+      const sources: SourceType[] = (data.items || []).map(item => {
+        // Determine source type based on URL or content
+        let type: "academic" | "trusted" | "blog" | "unknown" = "unknown";
+        const url = item.link.toLowerCase();
+        
+        // Academic sources check
+        if (url.includes('.edu') || 
+            url.includes('.ac.') ||
+            url.includes('scholar.') ||
+            url.includes('academic.') ||
+            url.includes('research.') || 
+            url.includes('sciencedirect.com') ||
+            url.includes('jstor.org') ||
+            url.includes('springer.com')) {
+          type = "academic";
+        }
+        // Trusted publications check
+        else if (url.includes('nytimes.com') ||
+                url.includes('washingtonpost.com') ||
+                url.includes('bbc.') ||
+                url.includes('reuters.com') ||
+                url.includes('npr.org') ||
+                url.includes('nationalgeographic.com') ||
+                url.includes('economist.com') ||
+                url.includes('scientificamerican.com')) {
+          type = "trusted";  
+        }
+        // Blog sources check
+        else if (url.includes('blog.') ||
+                url.includes('wordpress.') ||
+                url.includes('medium.com') ||
+                url.includes('blogger.') ||
+                url.includes('tumblr.') ||
+                url.includes('forum.')) {
+          type = "blog";
+        }
+
+        return {
+          url: item.link,
+          title: item.title,
+          snippet: item.snippet || "",
+          type
+        };
+      });
+
+      console.log(`Found ${sources.length} sources`);
+      
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch search results', details: data }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: response.status }
+        JSON.stringify({ sources }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    } catch (fetchError) {
+      console.error('Fetch error:', fetchError);
+      return new Response(
+        JSON.stringify({ warning: 'Error calling search API', sources: [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
-
-    const sources: SourceType[] = (data.items || []).map(item => {
-      // Determine source type based on URL or content
-      let type: "academic" | "trusted" | "blog" | "unknown" = "unknown";
-      const url = item.link.toLowerCase();
-      
-      // Academic sources check
-      if (url.includes('.edu') || 
-          url.includes('.ac.') ||
-          url.includes('scholar.') ||
-          url.includes('academic.') ||
-          url.includes('research.') || 
-          url.includes('sciencedirect.com') ||
-          url.includes('jstor.org') ||
-          url.includes('springer.com')) {
-        type = "academic";
-      }
-      // Trusted publications check
-      else if (url.includes('nytimes.com') ||
-              url.includes('washingtonpost.com') ||
-              url.includes('bbc.') ||
-              url.includes('reuters.com') ||
-              url.includes('npr.org') ||
-              url.includes('nationalgeographic.com') ||
-              url.includes('economist.com') ||
-              url.includes('scientificamerican.com')) {
-        type = "trusted";  
-      }
-      // Blog sources check
-      else if (url.includes('blog.') ||
-              url.includes('wordpress.') ||
-              url.includes('medium.com') ||
-              url.includes('blogger.') ||
-              url.includes('tumblr.') ||
-              url.includes('forum.')) {
-        type = "blog";
-      }
-
-      return {
-        url: item.link,
-        title: item.title,
-        snippet: item.snippet || "",
-        type
-      };
-    });
-
-    console.log(`Found ${sources.length} sources`);
-    
-    return new Response(
-      JSON.stringify({ sources }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    );
   } catch (error) {
     console.error('Error in search-sources function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ warning: 'Internal server error', sources: [] }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   }
 });

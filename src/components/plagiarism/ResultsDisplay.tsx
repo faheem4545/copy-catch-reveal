@@ -9,7 +9,8 @@ import {
   Download,
   ThumbsUp,
   ThumbsDown,
-  Loader2
+  Loader2,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +49,7 @@ interface ResultsDisplayProps {
   sources: Source[];
   highlightedText: React.ReactNode;
   isSearchingSources?: boolean;
+  onReset?: () => void;
 }
 
 const ResultsDisplay = ({
@@ -56,6 +58,7 @@ const ResultsDisplay = ({
   sources,
   highlightedText,
   isSearchingSources = false,
+  onReset,
 }: ResultsDisplayProps) => {
   const [activeSourceId, setActiveSourceId] = useState<number | null>(null);
   const [feedbackSubmitted, setFeedbackSubmitted] = useState<Record<number, "positive" | "negative" | null>>({});
@@ -78,6 +81,35 @@ const ResultsDisplay = ({
   };
 
   const handleDownloadReport = () => {
+    const reportText = `
+      Plagiarism Analysis Report
+      =========================
+      
+      Similarity Score: ${similarityScore}%
+      
+      Original Text:
+      ${originalText}
+      
+      Detected Sources (${sources.length}):
+      ${sources.map((source, index) => `
+        ${index + 1}. ${source.title}
+        URL: ${source.url}
+        Match Percentage: ${source.matchPercentage}%
+        Source Type: ${source.type || "Unknown"}
+        ${source.publicationDate ? `Publication Date: ${source.publicationDate}` : ""}
+      `).join('\n')}
+    `;
+    
+    const blob = new Blob([reportText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'plagiarism-report.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
     toast.success("Report downloaded successfully");
   };
 
@@ -140,7 +172,9 @@ const ResultsDisplay = ({
           </TabsList>
           <TabsContent value="highlighted" className="mt-4">
             <div className="bg-white p-4 rounded-md border min-h-[300px] max-h-[500px] overflow-auto">
-              {highlightedText}
+              {highlightedText || 
+                <p className="text-gray-500 text-center py-8">No text analysis available</p>
+              }
             </div>
           </TabsContent>
           <TabsContent value="sources" className="mt-4">
@@ -333,7 +367,9 @@ const ResultsDisplay = ({
                 )
               ) : (
                 <div className="p-8 text-center text-gray-500">
-                  No matching sources found based on your filter criteria
+                  {isSearchingSources 
+                    ? "Searching for matches..."
+                    : "No matching sources found based on your filter criteria"}
                 </div>
               )}
             </div>
@@ -349,10 +385,17 @@ const ResultsDisplay = ({
             <Download size={16} />
             Download Report
           </Button>
-          <Button variant="outline">Save to Dashboard</Button>
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
+            onClick={onReset}
+          >
+            <RefreshCw size={16} />
+            New Check
+          </Button>
           <Button 
             className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-            onClick={() => window.location.reload()}
+            onClick={onReset}
           >
             Try Another Check
           </Button>

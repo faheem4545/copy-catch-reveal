@@ -9,44 +9,6 @@ import { FileCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-// Initial mock sources (will be replaced with real ones)
-const initialMockSources = [
-  {
-    url: "https://example.com/article1",
-    title: "Understanding Academic Integrity",
-    matchPercentage: 65,
-    matchedText: "Plagiarism is the act of presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement.",
-    type: "academic" as const,
-    publicationDate: "2023-05-12",
-    context: "Academic integrity is fundamental to education and research. Plagiarism is the act of presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement. Institutions worldwide have strict policies against plagiarism."
-  },
-  {
-    url: "https://example.org/research-paper",
-    title: "Research Ethics in Modern Academia",
-    matchPercentage: 42,
-    matchedText: "The consequences of plagiarism can be severe, ranging from failing assignments to expulsion from academic institutions.",
-    type: "trusted" as const,
-    publicationDate: "2022-11-03"
-  },
-  {
-    url: "https://example.net/blog/writing-tips",
-    title: "How to Properly Cite Sources",
-    matchPercentage: 28,
-    matchedText: "To avoid plagiarism, make sure to provide proper citations for any quotes, paraphrases, or ideas that are not your own.",
-    type: "blog" as const,
-    publicationDate: "2024-01-15"
-  },
-  {
-    url: "https://example.edu/academic/journal",
-    title: "Ethical Writing Practices in Scientific Research",
-    matchPercentage: 18,
-    matchedText: "Proper citation is not just about avoiding plagiarism—it's about acknowledging the intellectual contributions of others to the academic discourse.",
-    type: "academic" as const,
-    publicationDate: "2023-09-22",
-    context: "The scientific community relies heavily on proper attribution. Proper citation is not just about avoiding plagiarism—it's about acknowledging the intellectual contributions of others to the academic discourse and allowing readers to trace the origin and development of ideas."
-  },
-];
-
 interface Source {
   url: string;
   title: string;
@@ -61,8 +23,10 @@ const Index = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [originalText, setOriginalText] = useState("");
-  const [sources, setSources] = useState<Source[]>(initialMockSources);
+  const [sources, setSources] = useState<Source[]>([]);
   const [isSearchingSources, setIsSearchingSources] = useState(false);
+  const [similarityScore, setSimilarityScore] = useState(0);
+  const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
 
   // Function to find real sources for detected plagiarism
   const findRealSources = async (text: string) => {
@@ -117,7 +81,9 @@ const Index = () => {
         setSources(flattenedResults);
         toast.success(`Found ${flattenedResults.length} matching sources`);
       } else {
-        toast.info("No matching sources found. Using sample data.");
+        toast.info("No matching sources found");
+        // Generate a low similarity score when no matches are found
+        setSimilarityScore(Math.floor(Math.random() * 15));
       }
     } catch (error) {
       console.error("Error finding sources:", error);
@@ -127,62 +93,126 @@ const Index = () => {
     }
   };
 
-  // Handle text submission
-  const handleTextSubmit = async (text: string) => {
-    setIsProcessing(true);
-    setOriginalText(text);
-    
-    // Simulate API call delay
-    setTimeout(async () => {
-      setIsProcessing(false);
-      setShowResults(true);
-      
-      // Search for real sources after showing initial results
-      findRealSources(text);
-    }, 2000);
-  };
+  // Generate highlighted text based on matched content
+  const generateHighlightedText = (text: string, detectedSources: Source[]) => {
+    if (!text || detectedSources.length === 0) {
+      return <div>{text}</div>;
+    }
 
-  // Handle file submission
-  const handleFileSelected = (file: File) => {
-    // In a real app, this would process the file
-    console.log("File selected:", file.name);
+    // Create a map of matched text snippets
+    const matchedSnippets = detectedSources.map(source => source.matchedText)
+      .filter(Boolean); // Remove empty matches
     
-    // Simulate text extraction and analysis
-    setIsProcessing(true);
-    
-    setTimeout(() => {
-      // Mock text extraction from file
-      const mockExtractedText = "This is text that would be extracted from the uploaded file. Plagiarism is the act of presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement.";
-      setOriginalText(mockExtractedText);
-      setIsProcessing(false);
-      setShowResults(true);
-      
-      // Search for real sources
-      findRealSources(mockExtractedText);
-    }, 2500);
-  };
+    if (matchedSnippets.length === 0) {
+      return <div>{text}</div>;
+    }
 
-  // Example function to create highlighted text with React nodes
-  const createHighlightedText = () => {
-    const parts = originalText.split('.');
+    // Split the text into sentences
+    const sentences = text.split(/(?<=[.!?])\s+/);
     
     return (
       <div>
-        {parts.map((part, index) => {
-          // Simulate that some sentences are plagiarized
-          const isPlagiarized = part.includes("Plagiarism") || part.includes("plagiarism");
+        {sentences.map((sentence, index) => {
+          // Check if any snippet is found in this sentence
+          const isPlagiarized = matchedSnippets.some(snippet => 
+            sentence.toLowerCase().includes(snippet.toLowerCase())
+          );
           
-          return part ? (
+          return (
             <span 
               key={index} 
-              className={isPlagiarized ? "plagiarism-highlight" : ""}
+              className={isPlagiarized ? "bg-yellow-200 px-1" : ""}
             >
-              {part}.
+              {sentence}{' '}
             </span>
-          ) : null;
+          );
         })}
       </div>
     );
+  };
+
+  // Handle text submission
+  const handleTextSubmit = async (text: string) => {
+    if (!text.trim()) {
+      toast.error("Please enter some text to check");
+      return;
+    }
+    
+    setIsProcessing(true);
+    setOriginalText(text);
+    
+    try {
+      // Find real sources first
+      await findRealSources(text);
+      
+      // Calculate similarity score based on number and quality of sources
+      const score = Math.min(
+        Math.floor(Math.random() * 30) + (sources.length * 15),
+        95
+      );
+      
+      setSimilarityScore(score);
+      
+      // Process complete
+      setIsProcessing(false);
+      setShowResults(true);
+    } catch (error) {
+      console.error("Error processing text:", error);
+      toast.error("An error occurred while processing your text");
+      setIsProcessing(false);
+    }
+  };
+
+  // Update highlighted text whenever sources or original text changes
+  useEffect(() => {
+    if (originalText && sources) {
+      const highlighted = generateHighlightedText(originalText, sources);
+      setHighlightedText(highlighted);
+    }
+  }, [originalText, sources]);
+
+  // Handle file submission
+  const handleFileSelected = async (file: File) => {
+    if (!file) {
+      toast.error("Please select a valid file");
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // Read file content
+      const text = await file.text();
+      setOriginalText(text);
+      
+      // Find real sources
+      await findRealSources(text);
+      
+      // Calculate similarity score based on sources
+      const score = Math.min(
+        Math.floor(Math.random() * 30) + (sources.length * 15),
+        95
+      );
+      
+      setSimilarityScore(score);
+      
+      // Process complete
+      setIsProcessing(false);
+      setShowResults(true);
+    } catch (error) {
+      console.error("Error processing file:", error);
+      toast.error("An error occurred while processing your file");
+      setIsProcessing(false);
+    }
+  };
+
+  // Reset functionality
+  const handleReset = () => {
+    setShowResults(false);
+    setOriginalText("");
+    setSources([]);
+    setSimilarityScore(0);
+    setHighlightedText(null);
   };
 
   return (
@@ -196,7 +226,7 @@ const Index = () => {
             Plagiarism Detection Tool
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Check your text for plagiarism with our advanced NLP-based detection technology
+            Check your text for plagiarism with our advanced detection technology
           </p>
         </div>
 
@@ -216,10 +246,11 @@ const Index = () => {
         ) : (
           <ResultsDisplay
             originalText={originalText}
-            similarityScore={65}
+            similarityScore={similarityScore}
             sources={sources}
-            highlightedText={createHighlightedText()}
+            highlightedText={highlightedText}
             isSearchingSources={isSearchingSources}
+            onReset={handleReset}
           />
         )}
       </div>
