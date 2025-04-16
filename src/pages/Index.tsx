@@ -7,25 +7,41 @@ import ResultsDisplay from "@/components/plagiarism/ResultsDisplay";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileCheck } from "lucide-react";
 
-// Mock data for demo purposes
+// Enhanced mock data with additional source information
 const mockSources = [
   {
     url: "https://example.com/article1",
     title: "Understanding Academic Integrity",
     matchPercentage: 65,
     matchedText: "Plagiarism is the act of presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement.",
+    type: "academic" as const,
+    publicationDate: "2023-05-12",
+    context: "Academic integrity is fundamental to education and research. Plagiarism is the act of presenting someone else's work or ideas as your own, with or without their consent, by incorporating it into your work without full acknowledgement. Institutions worldwide have strict policies against plagiarism."
   },
   {
     url: "https://example.org/research-paper",
     title: "Research Ethics in Modern Academia",
     matchPercentage: 42,
     matchedText: "The consequences of plagiarism can be severe, ranging from failing assignments to expulsion from academic institutions.",
+    type: "trusted" as const,
+    publicationDate: "2022-11-03"
   },
   {
     url: "https://example.net/blog/writing-tips",
     title: "How to Properly Cite Sources",
     matchPercentage: 28,
     matchedText: "To avoid plagiarism, make sure to provide proper citations for any quotes, paraphrases, or ideas that are not your own.",
+    type: "blog" as const,
+    publicationDate: "2024-01-15"
+  },
+  {
+    url: "https://example.edu/academic/journal",
+    title: "Ethical Writing Practices in Scientific Research",
+    matchPercentage: 18,
+    matchedText: "Proper citation is not just about avoiding plagiarism—it's about acknowledging the intellectual contributions of others to the academic discourse.",
+    type: "academic" as const,
+    publicationDate: "2023-09-22",
+    context: "The scientific community relies heavily on proper attribution. Proper citation is not just about avoiding plagiarism—it's about acknowledging the intellectual contributions of others to the academic discourse and allowing readers to trace the origin and development of ideas."
   },
 ];
 
@@ -97,7 +113,7 @@ const Index = () => {
             Plagiarism Detection Tool
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Check your text for plagiarism with our advanced detection technology
+            Check your text for plagiarism with our advanced NLP-based detection technology
           </p>
         </div>
 
