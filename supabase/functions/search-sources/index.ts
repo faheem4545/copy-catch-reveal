@@ -1,5 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { Redis } from "https://deno.land/x/redis@v0.29.3/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,6 +34,63 @@ interface SourceType {
   snippet: string;
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
+const RATE_LIMIT_MAX_REQUESTS = 10; // Max requests per window
+
+// Connect to Redis (if available)
+let redis: Redis | null = null;
+try {
+  const redisUrl = Deno.env.get('REDIS_URL');
+  if (redisUrl) {
+    redis = await new Redis(redisUrl);
+    console.log('Connected to Redis for rate limiting');
+  } else {
+    console.log('REDIS_URL not provided, using in-memory rate limiting');
+  }
+} catch (error) {
+  console.error('Failed to connect to Redis:', error);
+}
+
+// In-memory rate limiting store (fallback when Redis not available)
+const ipRequests: Record<string, { count: number; resetAt: number }> = {};
+
+// Check rate limit for an IP
+async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remainingRequests: number; resetAt: number }> {
+  const now = Date.now();
+  
+  if (redis) {
+    // Use Redis for distributed rate limiting
+    const key = `rate_limit:${ip}`;
+    const count = await redis.get(key);
+    const ttl = await redis.ttl(key);
+    
+    if (!count) {
+      await redis.set(key, "1", { ex: Math.floor(RATE_LIMIT_WINDOW / 1000) });
+      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - 1, resetAt: now + RATE_LIMIT_WINDOW };
+    } else {
+      const currentCount = parseInt(count, 10);
+      if (currentCount < RATE_LIMIT_MAX_REQUESTS) {
+        await redis.incr(key);
+        return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - currentCount - 1, resetAt: now + (ttl * 1000) };
+      } else {
+        return { allowed: false, remainingRequests: 0, resetAt: now + (ttl * 1000) };
+      }
+    }
+  } else {
+    // Use in-memory rate limiting
+    if (!ipRequests[ip] || now > ipRequests[ip].resetAt) {
+      ipRequests[ip] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
+      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - 1, resetAt: ipRequests[ip].resetAt };
+    } else if (ipRequests[ip].count < RATE_LIMIT_MAX_REQUESTS) {
+      ipRequests[ip].count++;
+      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - ipRequests[ip].count, resetAt: ipRequests[ip].resetAt };
+    } else {
+      return { allowed: false, remainingRequests: 0, resetAt: ipRequests[ip].resetAt };
+    }
+  }
+}
+
 // NLP Utility Functions
 function tokenize(text: string): string[] {
   // Simple tokenization - split by spaces and remove punctuation
@@ -43,92 +101,204 @@ function tokenize(text: string): string[] {
 }
 
 function calculateSimilarity(text1: string, text2: string): number {
-  const tokens1 = tokenize(text1);
-  const tokens2 = tokenize(text2);
+  if (!text1 || !text2) {
+    console.log("Warning: Empty text provided for similarity calculation");
+    return 0;
+  }
   
-  // Create sets for intersection
-  const set1 = new Set(tokens1);
-  const set2 = new Set(tokens2);
-  
-  // Find intersection
-  const intersection = new Set([...set1].filter(x => set2.has(x)));
-  
-  // Jaccard similarity coefficient
-  const similarity = intersection.size / (set1.size + set2.size - intersection.size);
-  return similarity;
+  try {
+    const tokens1 = tokenize(text1);
+    const tokens2 = tokenize(text2);
+    
+    if (tokens1.length === 0 || tokens2.length === 0) {
+      return 0;
+    }
+    
+    // Create sets for intersection
+    const set1 = new Set(tokens1);
+    const set2 = new Set(tokens2);
+    
+    // Find intersection
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    
+    // Jaccard similarity coefficient
+    const similarity = intersection.size / (set1.size + set2.size - intersection.size);
+    return similarity;
+  } catch (error) {
+    console.error("Error calculating similarity:", error);
+    return 0;
+  }
 }
 
 function extractKeyPhrases(text: string): string[] {
-  // Simple key phrase extraction based on token frequency
-  const tokens = tokenize(text);
-  const tokenFrequency: Record<string, number> = {};
-  
-  tokens.forEach(token => {
-    tokenFrequency[token] = (tokenFrequency[token] || 0) + 1;
-  });
-  
-  // Get top phrases by frequency
-  return Object.entries(tokenFrequency)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(entry => entry[0]);
+  try {
+    // Simple key phrase extraction based on token frequency
+    const tokens = tokenize(text);
+    const tokenFrequency: Record<string, number> = {};
+    
+    tokens.forEach(token => {
+      tokenFrequency[token] = (tokenFrequency[token] || 0) + 1;
+    });
+    
+    // Get top phrases by frequency
+    return Object.entries(tokenFrequency)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(entry => entry[0]);
+  } catch (error) {
+    console.error("Error extracting key phrases:", error);
+    return [];
+  }
+}
+
+// Log helper function
+function logEvent(type: string, data: any): void {
+  const timestamp = new Date().toISOString();
+  console.log(JSON.stringify({
+    timestamp,
+    type,
+    data
+  }));
 }
 
 Deno.serve(async (req) => {
+  const startTime = performance.now();
+  const requestId = crypto.randomUUID();
+  const clientIP = req.headers.get('x-forwarded-for') || 'unknown';
+  
+  logEvent('request_received', { 
+    id: requestId,
+    ip: clientIP,
+    method: req.method,
+    path: new URL(req.url).pathname
+  });
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { query } = await req.json();
+    // Check rate limit
+    const rateLimitResult = await checkRateLimit(clientIP);
+    if (!rateLimitResult.allowed) {
+      logEvent('rate_limited', { 
+        id: requestId,
+        ip: clientIP,
+        resetAt: new Date(rateLimitResult.resetAt).toISOString()
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Rate limit exceeded', 
+          message: 'Too many requests, please try again later.',
+          resetAt: new Date(rateLimitResult.resetAt).toISOString(),
+          sources: [] 
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': `${Math.ceil((rateLimitResult.resetAt - Date.now()) / 1000)}` }, 
+          status: 429 
+        }
+      );
+    }
+
+    // Add rate limit headers to all responses
+    const commonHeaders = {
+      ...corsHeaders,
+      'Content-Type': 'application/json',
+      'X-RateLimit-Limit': RATE_LIMIT_MAX_REQUESTS.toString(),
+      'X-RateLimit-Remaining': rateLimitResult.remainingRequests.toString(),
+      'X-RateLimit-Reset': Math.floor(rateLimitResult.resetAt / 1000).toString()
+    };
+
+    // Parse request body
+    let body;
+    try {
+      body = await req.json();
+    } catch (parseError) {
+      logEvent('parse_error', { id: requestId, error: parseError.message });
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body', sources: [] }),
+        { headers: commonHeaders, status: 400 }
+      );
+    }
+    
+    const { query } = body;
     
     if (!query || typeof query !== 'string') {
+      logEvent('validation_error', { id: requestId, error: 'Invalid query parameter' });
       return new Response(
         JSON.stringify({ error: 'Invalid query parameter', sources: [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        { headers: commonHeaders, status: 400 }
       );
+    }
+
+    // Trim very long queries to prevent abuse
+    const trimmedQuery = query.substring(0, 1000);
+    if (trimmedQuery.length < query.length) {
+      logEvent('query_trimmed', { id: requestId, originalLength: query.length, trimmedLength: trimmedQuery.length });
     }
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
     const GOOGLE_CSE_ID = 'a52863c5312114c0a'; // Using the provided CSE ID
 
     if (!GOOGLE_API_KEY) {
-      console.log('Warning: Missing Google API key');
+      logEvent('config_error', { id: requestId, error: 'Missing Google API key' });
       return new Response(
         JSON.stringify({ 
           warning: 'API credentials not configured', 
           sources: [] 
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        { headers: commonHeaders, status: 200 }
       );
     }
 
     // Extract key phrases for better search
-    const keyPhrases = extractKeyPhrases(query);
-    console.log(`Key phrases: ${keyPhrases.join(', ')}`);
+    const keyPhrases = extractKeyPhrases(trimmedQuery);
+    logEvent('key_phrases_extracted', { id: requestId, keyPhrases });
     
     // Use the original query along with top key phrases for better search
-    const searchQuery = `${query} ${keyPhrases.slice(0, 2).join(' ')}`;
+    const searchQuery = `${trimmedQuery} ${keyPhrases.slice(0, 2).join(' ')}`;
     
     const searchUrl = new URL('https://www.googleapis.com/customsearch/v1');
     searchUrl.searchParams.append('key', GOOGLE_API_KEY);
     searchUrl.searchParams.append('cx', GOOGLE_CSE_ID);
     searchUrl.searchParams.append('q', searchQuery);
 
-    console.log(`Searching for: "${searchQuery}"`);
+    logEvent('search_started', { id: requestId, searchQuery });
     
     try {
-      const response = await fetch(searchUrl.toString());
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(searchUrl.toString(), { 
+        signal: controller.signal 
+      }).finally(() => clearTimeout(timeoutId));
+      
       const data: SearchResponse = await response.json();
       
       if (!response.ok || data.error) {
-        console.error('Google API error:', data.error || response.statusText);
+        logEvent('api_error', { 
+          id: requestId, 
+          status: response.status, 
+          error: data.error || response.statusText 
+        });
         return new Response(
-          JSON.stringify({ warning: 'Search API returned an error', sources: [] }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+          JSON.stringify({ 
+            warning: 'Search API returned an error', 
+            error: data.error?.message || response.statusText,
+            sources: [] 
+          }),
+          { headers: commonHeaders, status: 200 }
         );
       }
+
+      const totalResults = parseInt(data.searchInformation?.totalResults || '0', 10);
+      logEvent('search_completed', { 
+        id: requestId, 
+        totalResults,
+        resultCount: data.items?.length || 0
+      });
 
       const sources: (SourceType & { similarity: number })[] = (data.items || []).map(item => {
         // Determine source type based on URL or content
@@ -168,7 +338,7 @@ Deno.serve(async (req) => {
         }
 
         // Calculate text similarity between query and snippet
-        const similarity = calculateSimilarity(query, item.snippet || "");
+        const similarity = calculateSimilarity(trimmedQuery, item.snippet || "");
 
         return {
           url: item.link,
@@ -182,29 +352,64 @@ Deno.serve(async (req) => {
       // Sort sources by similarity
       const sortedSources = sources.sort((a, b) => b.similarity - a.similarity);
 
-      console.log(`Found ${sortedSources.length} sources`);
+      logEvent('processing_completed', { 
+        id: requestId, 
+        processedSourceCount: sortedSources.length,
+        topSimilarity: sortedSources.length > 0 ? sortedSources[0].similarity : 0
+      });
+      
+      const endTime = performance.now();
+      const processingTime = endTime - startTime;
+      
+      logEvent('request_completed', { 
+        id: requestId, 
+        processingTimeMs: processingTime,
+        sourceCount: sortedSources.length
+      });
       
       return new Response(
         JSON.stringify({ 
           sources: sortedSources.map(({ similarity, ...source }) => ({
             ...source,
             matchPercentage: similarity  // Convert similarity score to matchPercentage for frontend
-          })) 
+          })),
+          processingTimeMs: Math.round(processingTime),
+          requestId
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        { headers: commonHeaders, status: 200 }
       );
     } catch (fetchError) {
-      console.error('Fetch error:', fetchError);
+      const isAbortError = fetchError.name === 'AbortError';
+      
+      logEvent('fetch_error', { 
+        id: requestId, 
+        error: fetchError.message,
+        isTimeout: isAbortError
+      });
+      
       return new Response(
-        JSON.stringify({ warning: 'Error calling search API', sources: [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        JSON.stringify({ 
+          warning: isAbortError ? 'Search request timed out' : 'Error calling search API', 
+          error: fetchError.message,
+          sources: [] 
+        }),
+        { headers: commonHeaders, status: isAbortError ? 504 : 200 }
       );
     }
   } catch (error) {
-    console.error('Error in search-sources function:', error);
+    logEvent('unhandled_error', { 
+      id: requestId, 
+      error: error.message,
+      stack: error.stack
+    });
+    
     return new Response(
-      JSON.stringify({ warning: 'Internal server error', sources: [] }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      JSON.stringify({ 
+        warning: 'Internal server error', 
+        error: error.message,
+        sources: [] 
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
