@@ -7,6 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface Source {
   url: string;
@@ -26,6 +29,8 @@ const Index = () => {
   const [isSearchingSources, setIsSearchingSources] = useState(false);
   const [similarityScore, setSimilarityScore] = useState(0);
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
+  const [showCseIdInput, setShowCseIdInput] = useState(false);
+  const [cseId, setCseId] = useState("a52863c5312114c0a"); // Default CSE ID
 
   const findRealSources = async (text: string) => {
     try {
@@ -50,7 +55,7 @@ const Index = () => {
       const searchPromises = searchQueries.map(async (query) => {
         try {
           const { data, error } = await supabase.functions.invoke('search-sources', {
-            body: { query }
+            body: { query, cseId }
           });
           
           if (error) {
@@ -216,6 +221,23 @@ const Index = () => {
     setHighlightedText(null);
   };
 
+  const handleSaveCseId = () => {
+    if (cseId && cseId.trim().length > 0) {
+      localStorage.setItem('google_cse_id', cseId);
+      toast.success("Google Custom Search Engine ID saved");
+      setShowCseIdInput(false);
+    } else {
+      toast.error("Please enter a valid Google CSE ID");
+    }
+  };
+
+  useEffect(() => {
+    const savedCseId = localStorage.getItem('google_cse_id');
+    if (savedCseId) {
+      setCseId(savedCseId);
+    }
+  }, []);
+
   useEffect(() => {
     if (originalText && sources) {
       const highlighted = generateHighlightedText(originalText, sources);
@@ -236,7 +258,36 @@ const Index = () => {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Check your text for plagiarism with our advanced NLP detection technology
           </p>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowCseIdInput(!showCseIdInput)}
+            className="mt-4"
+          >
+            {showCseIdInput ? "Hide Settings" : "Configure Settings"}
+          </Button>
         </div>
+
+        {showCseIdInput && (
+          <div className="mb-6">
+            <Alert>
+              <AlertDescription>
+                <div className="space-y-4">
+                  <p>Enter your Google Custom Search Engine ID in the form below. This is different from your API key and is needed to specify which search engine configuration to use.</p>
+                  <p>You can create one at: <a href="https://programmablesearchengine.google.com/controlpanel/all" className="text-blue-600 hover:underline" target="_blank" rel="noopener noreferrer">https://programmablesearchengine.google.com/</a> if you haven't already.</p>
+                  <div className="flex space-x-2">
+                    <Input
+                      value={cseId}
+                      onChange={(e) => setCseId(e.target.value)}
+                      placeholder="Enter Google CSE ID"
+                      className="flex-grow"
+                    />
+                    <Button onClick={handleSaveCseId}>Save</Button>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         {!showResults ? (
           <Tabs defaultValue="text" className="w-full">
