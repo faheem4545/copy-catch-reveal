@@ -1,4 +1,3 @@
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { Redis } from "https://deno.land/x/redis@v0.29.3/mod.ts";
 
@@ -240,18 +239,35 @@ Deno.serve(async (req) => {
     }
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
-    const GOOGLE_CSE_ID = 'a52863c5312114c0a'; // Using the provided CSE ID
 
+    // Add explicit logging for API key verification
     if (!GOOGLE_API_KEY) {
-      logEvent('config_error', { id: requestId, error: 'Missing Google API key' });
+      console.error('CRITICAL: Google CSE API Key is NOT configured');
+      logEvent('api_key_missing', { 
+        message: 'Google Custom Search API key is missing or not set correctly' 
+      });
+
       return new Response(
         JSON.stringify({ 
-          warning: 'API credentials not configured', 
+          error: 'API configuration error', 
+          message: 'Google Custom Search API key is not configured',
           sources: [] 
         }),
-        { headers: commonHeaders, status: 200 }
+        { 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          }, 
+          status: 500 
+        }
       );
     }
+
+    // Log API key presence (without revealing the actual key)
+    logEvent('api_key_status', { 
+      keyPresent: !!GOOGLE_API_KEY, 
+      keyLength: GOOGLE_API_KEY.length 
+    });
 
     // Extract key phrases for better search
     const keyPhrases = extractKeyPhrases(trimmedQuery);
