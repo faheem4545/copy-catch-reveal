@@ -239,6 +239,7 @@ Deno.serve(async (req) => {
     }
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
+    const GOOGLE_CSE_ID = Deno.env.get('GOOGLE_CSE_ID') || 'a52863c5312114c0a'; // Using the provided CSE ID or fallback to hardcoded one
 
     // Add explicit logging for API key verification
     if (!GOOGLE_API_KEY) {
@@ -266,7 +267,8 @@ Deno.serve(async (req) => {
     // Log API key presence (without revealing the actual key)
     logEvent('api_key_status', { 
       keyPresent: !!GOOGLE_API_KEY, 
-      keyLength: GOOGLE_API_KEY.length 
+      keyLength: GOOGLE_API_KEY.length,
+      cseIdPresent: !!GOOGLE_CSE_ID
     });
 
     // Extract key phrases for better search
@@ -281,7 +283,7 @@ Deno.serve(async (req) => {
     searchUrl.searchParams.append('cx', GOOGLE_CSE_ID);
     searchUrl.searchParams.append('q', searchQuery);
 
-    logEvent('search_started', { id: requestId, searchQuery });
+    logEvent('search_started', { id: requestId, searchQuery, cseId: GOOGLE_CSE_ID });
     
     try {
       const controller = new AbortController();
