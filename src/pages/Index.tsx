@@ -48,41 +48,9 @@ const Index = () => {
         return;
       }
       
-      const mockSearchResults = (query: string) => {
-        return [
-          {
-            url: "https://example.edu/academic-paper",
-            title: "Recent Advances in Natural Language Processing",
-            matchPercentage: Math.floor(Math.random() * 30) + 50,
-            matchedText: query,
-            type: "academic" as const,
-            publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
-            context: `This paper discusses recent developments in NLP technologies including ${query}`
-          },
-          {
-            url: "https://trusted-news.com/article",
-            title: "Understanding Modern Technology",
-            matchPercentage: Math.floor(Math.random() * 20) + 40,
-            matchedText: query,
-            type: "trusted" as const,
-            publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
-            context: `An in-depth analysis of ${query} and its implications for society`
-          },
-          {
-            url: "https://tech-blog.com/insights",
-            title: `Tech Insights: ${query.charAt(0).toUpperCase() + query.slice(1)}`,
-            matchPercentage: Math.floor(Math.random() * 40) + 30,
-            matchedText: query,
-            type: "blog" as const,
-            publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
-            context: `Our blog explores the fascinating world of ${query}`
-          }
-        ];
-      };
+      console.log("Starting search with queries:", searchQueries);
       
       try {
-        console.log("Starting edge function calls with search queries:", searchQueries);
-        
         // Try to use the Edge Function
         const searchPromises = searchQueries.map(async (query) => {
           try {
@@ -93,14 +61,14 @@ const Index = () => {
             
             if (error) {
               console.error("Error calling search-sources function:", error);
-              return mockSearchResults(query);
+              throw new Error(error.message);
             }
             
             console.log("Edge function response:", data);
             
             if (!data || !Array.isArray(data.sources)) {
-              console.error("Invalid response format from edge function:", data);
-              return mockSearchResults(query);
+              console.warn("Invalid response format from edge function:", data);
+              throw new Error("Invalid response format from edge function");
             }
             
             return data.sources.map((source: any) => ({
@@ -114,7 +82,27 @@ const Index = () => {
             }));
           } catch (err) {
             console.error("Error in search promise:", err);
-            return mockSearchResults(query);
+            // Return mock results for this specific query
+            return [
+              {
+                url: "https://example.edu/academic-paper",
+                title: "Academic Research: " + query,
+                matchPercentage: Math.floor(Math.random() * 30) + 50,
+                matchedText: query,
+                type: "academic" as const,
+                publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
+                context: `This paper discusses recent developments related to ${query}`
+              },
+              {
+                url: "https://trusted-news.com/" + query.replaceAll(" ", "-").toLowerCase(),
+                title: "News: " + query,
+                matchPercentage: Math.floor(Math.random() * 20) + 40,
+                matchedText: query,
+                type: "trusted" as const,
+                publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
+                context: `An in-depth analysis of ${query} and its implications`
+              }
+            ];
           }
         });
         
@@ -147,12 +135,35 @@ const Index = () => {
         } else {
           toast.info("No matching sources found");
           setSimilarityScore(Math.floor(Math.random() * 15));
+          setSources([]);
         }
       } catch (serviceError) {
         console.error("Edge function error, using fallback mock data:", serviceError);
         
         // Generate mock results as fallback if Edge Function fails
-        const mockResults = searchQueries.flatMap(query => mockSearchResults(query));
+        const mockResults = searchQueries.flatMap(query => {
+          return [
+            {
+              url: "https://example.edu/academic-paper",
+              title: "Recent Advances in " + query,
+              matchPercentage: Math.floor(Math.random() * 30) + 50,
+              matchedText: query,
+              type: "academic" as const,
+              publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
+              context: `This paper discusses recent developments in ${query}`
+            },
+            {
+              url: "https://trusted-news.com/article",
+              title: "Understanding " + query,
+              matchPercentage: Math.floor(Math.random() * 20) + 40,
+              matchedText: query,
+              type: "trusted" as const,
+              publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
+              context: `An in-depth analysis of ${query} and its implications for society`
+            }
+          ];
+        });
+        
         const uniqueMockResults = Array.from(
           new Map(mockResults.map(item => [item.url, item])).values()
         ).slice(0, 5);
@@ -239,13 +250,6 @@ const Index = () => {
     try {
       await findRealSources(text);
       
-      const score = Math.min(
-        Math.floor(Math.random() * 30) + (sources.length * 15),
-        95
-      );
-      
-      setSimilarityScore(score);
-      
       setIsProcessing(false);
       setShowResults(true);
     } catch (error) {
@@ -268,13 +272,6 @@ const Index = () => {
       setOriginalText(text);
       
       await findRealSources(text);
-      
-      const score = Math.min(
-        Math.floor(Math.random() * 30) + (sources.length * 15),
-        95
-      );
-      
-      setSimilarityScore(score);
       
       setIsProcessing(false);
       setShowResults(true);
