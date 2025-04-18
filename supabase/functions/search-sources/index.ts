@@ -1,6 +1,6 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { Redis } from "https://deno.land/x/redis@v0.29.3/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,61 +38,11 @@ interface SourceType {
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute in milliseconds
 const RATE_LIMIT_MAX_REQUESTS = 10; // Max requests per window
 
-// In-memory rate limiting store (fallback when Redis not available)
+// In-memory rate limiting store
 const ipRequests: Record<string, { count: number; resetAt: number }> = {};
 
 // Default CSE ID to use if none provided
 const DEFAULT_CSE_ID = 'a52863c5312114c0a';
-
-// Connect to Redis (if available)
-let redis: Redis | null = null;
-try {
-  const redisUrl = Deno.env.get('REDIS_URL');
-  if (redisUrl) {
-    redis = await new Redis(redisUrl);
-    console.log('Connected to Redis for rate limiting');
-  } else {
-    console.log('REDIS_URL not provided, using in-memory rate limiting');
-  }
-} catch (error) {
-  console.error('Failed to connect to Redis:', error);
-}
-
-// Check rate limit for an IP
-async function checkRateLimit(ip: string): Promise<{ allowed: boolean; remainingRequests: number; resetAt: number }> {
-  const now = Date.now();
-  
-  if (redis) {
-    // Use Redis for distributed rate limiting
-    const key = `rate_limit:${ip}`;
-    const count = await redis.get(key);
-    const ttl = await redis.ttl(key);
-    
-    if (!count) {
-      await redis.set(key, "1", { ex: Math.floor(RATE_LIMIT_WINDOW / 1000) });
-      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - 1, resetAt: now + RATE_LIMIT_WINDOW };
-    } else {
-      const currentCount = parseInt(count, 10);
-      if (currentCount < RATE_LIMIT_MAX_REQUESTS) {
-        await redis.incr(key);
-        return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - currentCount - 1, resetAt: now + (ttl * 1000) };
-      } else {
-        return { allowed: false, remainingRequests: 0, resetAt: now + (ttl * 1000) };
-      }
-    }
-  } else {
-    // Use in-memory rate limiting
-    if (!ipRequests[ip] || now > ipRequests[ip].resetAt) {
-      ipRequests[ip] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
-      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - 1, resetAt: ipRequests[ip].resetAt };
-    } else if (ipRequests[ip].count < RATE_LIMIT_MAX_REQUESTS) {
-      ipRequests[ip].count++;
-      return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - ipRequests[ip].count, resetAt: ipRequests[ip].resetAt };
-    } else {
-      return { allowed: false, remainingRequests: 0, resetAt: ipRequests[ip].resetAt };
-    }
-  }
-}
 
 // NLP Utility Functions
 function tokenize(text: string): string[] {
@@ -195,6 +145,22 @@ function getMockSearchResults(query: string): any[] {
   ];
 }
 
+// Check rate limit for an IP
+function checkRateLimit(ip: string): { allowed: boolean; remainingRequests: number; resetAt: number } {
+  const now = Date.now();
+  
+  // Use in-memory rate limiting
+  if (!ipRequests[ip] || now > ipRequests[ip].resetAt) {
+    ipRequests[ip] = { count: 1, resetAt: now + RATE_LIMIT_WINDOW };
+    return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - 1, resetAt: ipRequests[ip].resetAt };
+  } else if (ipRequests[ip].count < RATE_LIMIT_MAX_REQUESTS) {
+    ipRequests[ip].count++;
+    return { allowed: true, remainingRequests: RATE_LIMIT_MAX_REQUESTS - ipRequests[ip].count, resetAt: ipRequests[ip].resetAt };
+  } else {
+    return { allowed: false, remainingRequests: 0, resetAt: ipRequests[ip].resetAt };
+  }
+}
+
 serve(async (req) => {
   const startTime = performance.now();
   const requestId = crypto.randomUUID();
@@ -214,7 +180,7 @@ serve(async (req) => {
 
   try {
     // Check rate limit
-    const rateLimitResult = await checkRateLimit(clientIP);
+    const rateLimitResult = checkRateLimit(clientIP);
     if (!rateLimitResult.allowed) {
       logEvent('rate_limited', { 
         id: requestId,

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
@@ -82,26 +81,36 @@ const Index = () => {
       };
       
       try {
-        // Try to use the Edge Function first
+        console.log("Starting edge function calls with search queries:", searchQueries);
+        
+        // Try to use the Edge Function
         const searchPromises = searchQueries.map(async (query) => {
           try {
+            console.log("Calling edge function for query:", query);
             const { data, error } = await supabase.functions.invoke('search-sources', {
               body: { query, cseId }
             });
             
             if (error) {
-              console.error("Error searching sources:", error);
+              console.error("Error calling search-sources function:", error);
+              return mockSearchResults(query);
+            }
+            
+            console.log("Edge function response:", data);
+            
+            if (!data || !Array.isArray(data.sources)) {
+              console.error("Invalid response format from edge function:", data);
               return mockSearchResults(query);
             }
             
             return data.sources.map((source: any) => ({
-              url: source.url,
-              title: source.title,
+              url: source.url || "https://example.com",
+              title: source.title || "Untitled Source",
               matchPercentage: source.matchPercentage || Math.floor(Math.random() * 40) + 30,
               matchedText: query,
-              type: source.type,
+              type: source.type || "unknown",
               publicationDate: new Date(Date.now() - Math.floor(Math.random() * 31536000000)).toISOString().split('T')[0],
-              context: source.snippet
+              context: source.snippet || "No context available"
             }));
           } catch (err) {
             console.error("Error in search promise:", err);
@@ -110,6 +119,7 @@ const Index = () => {
         });
         
         const searchResults = await Promise.all(searchPromises);
+        console.log("All search results:", searchResults);
         
         const flattenedResults = Array.from(
           new Map(
@@ -118,6 +128,8 @@ const Index = () => {
               .map(item => [item.url, item])
           ).values()
         ).slice(0, 5);
+        
+        console.log("Final flattened results:", flattenedResults);
         
         if (flattenedResults.length > 0) {
           setSources(flattenedResults);
