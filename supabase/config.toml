@@ -3,3 +3,4 @@ project_id = "lovable"
 
 [functions.search-sources]
 verify_jwt = false
+

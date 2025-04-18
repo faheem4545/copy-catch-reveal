@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { Redis } from "https://deno.land/x/redis@v0.29.3/mod.ts";
@@ -41,6 +40,9 @@ const RATE_LIMIT_MAX_REQUESTS = 10; // Max requests per window
 
 // In-memory rate limiting store (fallback when Redis not available)
 const ipRequests: Record<string, { count: number; resetAt: number }> = {};
+
+// Default CSE ID to use if none provided
+const DEFAULT_CSE_ID = 'a52863c5312114c0a';
 
 // Connect to Redis (if available)
 let redis: Redis | null = null;
@@ -271,56 +273,29 @@ serve(async (req) => {
       logEvent('query_trimmed', { id: requestId, originalLength: query.length, trimmedLength: trimmedQuery.length });
     }
 
-    // Safe API key and CSE ID retrieval with fallbacks
-    let GOOGLE_API_KEY;
-    let GOOGLE_CSE_ID;
-
-    try {
-      // First, try to get the API key from environment variables
-      GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
-      
-      // Log the API key status (presence/absence, not the actual key)
-      logEvent('api_key_status', { 
-        keyPresent: !!GOOGLE_API_KEY,
-        keyLength: GOOGLE_API_KEY ? GOOGLE_API_KEY.length : 0
-      });
-      
-      if (!GOOGLE_API_KEY) {
-        logEvent('api_key_missing', { 
-          message: "Google CSE API key not found in environment variables" 
-        });
-      }
-    } catch (error) {
-      logEvent('api_key_error', { error: error.message });
-      GOOGLE_API_KEY = null;
-    }
-
-    // Try to get CSE ID with multiple fallbacks
-    try {
-      // First try environment variable
-      GOOGLE_CSE_ID = Deno.env.get('GOOGLE_CSE_ID');
-      
-      // If not found, use a hardcoded fallback
-      if (!GOOGLE_CSE_ID) {
-        GOOGLE_CSE_ID = 'a52863c5312114c0a'; // Fallback CSE ID from index.html
-        logEvent('cse_id_fallback', { 
-          message: "Using fallback CSE ID from hardcoded value",
-          idValue: GOOGLE_CSE_ID
-        });
-      } else {
-        logEvent('cse_id_status', { 
-          idPresent: true,
-          idSource: "environment variable"
-        });
-      }
-    } catch (error) {
-      logEvent('cse_id_error', { error: error.message });
-      GOOGLE_CSE_ID = 'a52863c5312114c0a'; // Hardcoded fallback
-      logEvent('cse_id_fallback', { 
-        message: "Using fallback CSE ID after error",
-        idValue: GOOGLE_CSE_ID
+    // Get API key from environment with fallback
+    let GOOGLE_API_KEY = Deno.env.get('GOOGLE_CSE_API_KEY');
+    
+    // Log API key status (presence/absence, not the actual key)
+    logEvent('api_key_status', { 
+      keyPresent: !!GOOGLE_API_KEY,
+      keyLength: GOOGLE_API_KEY ? GOOGLE_API_KEY.length : 0
+    });
+    
+    if (!GOOGLE_API_KEY) {
+      logEvent('api_key_missing', { 
+        message: "Google CSE API key not found in environment variables, using mock results" 
       });
     }
+
+    // Always use the default CSE ID, ignoring any user-provided one for security
+    const GOOGLE_CSE_ID = DEFAULT_CSE_ID; 
+    
+    logEvent('cse_id_status', { 
+      idPresent: true,
+      idSource: "hardcoded default",
+      idValue: GOOGLE_CSE_ID
+    });
 
     // If API key is missing, use mock results
     if (!GOOGLE_API_KEY) {
