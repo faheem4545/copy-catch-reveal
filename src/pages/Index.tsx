@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
@@ -94,7 +95,7 @@ const Index = () => {
                 context: `This paper discusses recent developments related to ${query}`
               },
               {
-                url: "https://trusted-news.com/" + query.replaceAll(" ", "-").toLowerCase(),
+                url: "https://trusted-news.com/" + query.replace(/\s+/g, "-").toLowerCase(),
                 title: "News: " + query,
                 matchPercentage: Math.floor(Math.random() * 20) + 40,
                 matchedText: query,

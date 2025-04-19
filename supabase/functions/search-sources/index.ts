@@ -48,7 +48,8 @@ serve(async (req) => {
   logEvent('request_received', { 
     id: requestId,
     method: req.method,
-    path: new URL(req.url).pathname
+    path: new URL(req.url).pathname,
+    headers: Object.fromEntries(req.headers.entries())
   });
 
   // Handle CORS preflight requests
