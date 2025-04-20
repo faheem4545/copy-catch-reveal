@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
@@ -23,6 +22,7 @@ const Dashboard = () => {
     return null;
   }
 
+  // Calculate real statistics from the actual reports data
   const averageScore = reports?.length
     ? Math.round(reports.reduce((acc, report) => acc + report.score, 0) / reports.length)
     : 0;
@@ -35,7 +35,7 @@ const Dashboard = () => {
         <h1 className="text-3xl font-bold mb-2">Your Dashboard</h1>
         <p className="text-gray-600">Track and manage your plagiarism reports</p>
       </div>
-
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader className="pb-2">
