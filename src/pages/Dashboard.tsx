@@ -5,20 +5,32 @@ import Layout from "@/components/layout/Layout";
 import { useAuth } from "@/context/AuthContext";
 import { usePlagiarismReports } from "@/hooks/use-plagiarism-reports";
 import { Reports } from "@/components/dashboard/Reports";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, BarChart3 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { FileText, BarChart3, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
 
 const Dashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const { data: reports, isLoading: reportsLoading } = usePlagiarismReports();
+  const { 
+    data: reports, 
+    isLoading: reportsLoading, 
+    error: reportsError 
+  } = usePlagiarismReports();
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/login");
     }
   }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (reportsError) {
+      toast.error("Failed to load your reports. Please try again later.");
+      console.error(reportsError);
+    }
+  }, [reportsError]);
 
   if (authLoading) {
     return null;
@@ -120,6 +132,11 @@ const Dashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Recent Reports</CardTitle>
+          {reports && reports.length === 0 && (
+            <CardDescription>
+              You haven't created any reports yet. Start by checking your first document.
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent>
           <Reports reports={reports || []} isLoading={reportsLoading} />

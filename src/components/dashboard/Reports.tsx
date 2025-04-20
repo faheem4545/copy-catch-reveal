@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AlertCircle } from "lucide-react";
 
 interface ReportsProps {
   reports: PlagiarismReport[];
@@ -30,7 +31,8 @@ export function Reports({ reports, isLoading }: ReportsProps) {
 
   if (reports.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-gray-500 flex flex-col items-center">
+        <AlertCircle className="h-10 w-10 text-gray-400 mb-2" />
         <p>No plagiarism reports found. Check your first document to get started!</p>
       </div>
     );
