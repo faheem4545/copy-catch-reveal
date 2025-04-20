@@ -9,14 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { FileText, BarChart3, AlertCircle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import TextInput from "@/components/plagiarism/TextInput";
+import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
 
 const Dashboard = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [isProcessing, setIsProcessing] = useState(false);
   const { 
     data: reports, 
     isLoading: reportsLoading, 
-    error: reportsError 
+    error: reportsError,
+    refetch
   } = usePlagiarismReports();
 
   useEffect(() => {
@@ -31,6 +36,52 @@ const Dashboard = () => {
       console.error(reportsError);
     }
   }, [reportsError]);
+
+  const handleSubmitText = async (text: string) => {
+    if (!user) {
+      toast.error("You must be logged in to check plagiarism");
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      // Simulate a plagiarism check
+      // In a real app, you'd call an API here
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Generate a random score for demo purposes
+      const score = Math.floor(Math.random() * 100);
+      const wordCount = text.split(/\s+/).filter(Boolean).length;
+      
+      // Store the report in Supabase
+      const { data, error } = await supabase
+        .from("plagiarism_reports")
+        .insert({
+          user_id: user.id,
+          title: `Report ${new Date().toLocaleString()}`,
+          content: text,
+          score: score,
+          word_count: wordCount,
+          status: "completed"
+        })
+        .select();
+      
+      if (error) {
+        console.error("Error creating report:", error);
+        toast.error("Failed to save plagiarism report");
+        throw error;
+      }
+      
+      toast.success("Plagiarism check completed");
+      refetch(); // Refresh the reports list
+      
+    } catch (err) {
+      console.error("Error during plagiarism check:", err);
+      toast.error("An error occurred during plagiarism check");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (authLoading) {
     return null;
@@ -91,6 +142,16 @@ const Dashboard = () => {
         <p className="text-gray-600">Track and manage your plagiarism reports</p>
       </div>
       
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle>Check for Plagiarism</CardTitle>
+          <CardDescription>Paste your text below to check for plagiarism</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TextInput onSubmit={handleSubmitText} isProcessing={isProcessing} />
+        </CardContent>
+      </Card>
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardHeader className="pb-2">
@@ -142,6 +203,14 @@ const Dashboard = () => {
           <Reports reports={reports || []} isLoading={reportsLoading} />
         </CardContent>
       </Card>
+      
+      {user && (
+        <div className="mt-4 p-4 bg-gray-50 rounded border text-sm">
+          <p className="font-medium">Debug Info (will be removed in production):</p>
+          <p>User ID: {user.id}</p>
+          <p>Reports count: {reports?.length || 0}</p>
+        </div>
+      )}
     </Layout>
   );
 };
