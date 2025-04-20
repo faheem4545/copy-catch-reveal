@@ -1,41 +1,22 @@
 
 import { PlagiarismReport } from "@/hooks/use-plagiarism-reports";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { AlertCircle } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
+import { downloadReport } from "@/utils/report-utils";
 
 interface ReportsProps {
   reports: PlagiarismReport[];
-  isLoading: boolean;
+  isLoading?: boolean;
 }
 
-export function Reports({ reports, isLoading }: ReportsProps) {
+export const Reports = ({ reports, isLoading }: ReportsProps) => {
   if (isLoading) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-[250px]" />
-        <Skeleton className="h-4 w-[200px]" />
-        <Skeleton className="h-4 w-[300px]" />
-      </div>
-    );
+    return <div>Loading reports...</div>;
   }
 
   if (reports.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500 flex flex-col items-center">
-        <AlertCircle className="h-10 w-10 text-gray-400 mb-2" />
-        <p>No plagiarism reports found. Check your first document to get started!</p>
-      </div>
-    );
+    return <div className="text-center py-8 text-gray-500">No plagiarism reports found</div>;
   }
 
   return (
@@ -43,39 +24,33 @@ export function Reports({ reports, isLoading }: ReportsProps) {
       <TableHeader>
         <TableRow>
           <TableHead>Title</TableHead>
-          <TableHead>Date</TableHead>
           <TableHead>Score</TableHead>
-          <TableHead>Words</TableHead>
+          <TableHead>Word Count</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {reports.map((report) => (
           <TableRow key={report.id}>
-            <TableCell className="font-medium">{report.title}</TableCell>
-            <TableCell>{format(new Date(report.created_at), "MMM d, yyyy")}</TableCell>
-            <TableCell>
-              <Badge 
-                className={
-                  report.score < 15 
-                    ? "bg-green-500" 
-                    : report.score < 30 
-                    ? "bg-yellow-500" 
-                    : report.score < 50 
-                    ? "bg-orange-500" 
-                    : "bg-red-500"
-                }
-              >
-                {report.score}%
-              </Badge>
-            </TableCell>
+            <TableCell>{report.title}</TableCell>
+            <TableCell>{report.score}%</TableCell>
             <TableCell>{report.word_count}</TableCell>
+            <TableCell>{report.status}</TableCell>
             <TableCell>
-              <Badge variant="outline">{report.status}</Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => downloadReport(report)}
+                className="flex items-center gap-2"
+              >
+                <Download size={16} />
+                Download
+              </Button>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
   );
-}
+};
