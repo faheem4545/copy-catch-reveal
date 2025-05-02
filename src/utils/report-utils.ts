@@ -36,7 +36,23 @@ export const downloadAsPdf = (report: PlagiarismReport) => {
   
   // Prepare citation suggestions based on detected sources
   let citationSuggestions = '';
-  if (report.score > 20) {
+  if (report.citation_suggestions && Array.isArray(report.citation_suggestions) && report.citation_suggestions.length > 0) {
+    citationSuggestions = `
+      <div class="citation-suggestions">
+        <h3>Citation Suggestions:</h3>
+        <p>Based on content similarity, consider citing the following sources:</p>
+        <ul>
+          ${report.citation_suggestions.map(citation => `
+            <li>${citation.author || 'Unknown Author'} (${citation.date || 'n.d.'}). 
+            "${citation.title || 'Untitled'}". 
+            ${citation.publisher ? citation.publisher + '.' : ''}
+            ${citation.url ? `<a href="${citation.url}">${citation.url}</a>` : ''}
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+  } else if (report.score > 20) {
     citationSuggestions = `
       <div class="citation-suggestions">
         <h3>Citation Suggestions:</h3>
@@ -143,7 +159,17 @@ export const downloadAsPdf = (report: PlagiarismReport) => {
 export const generateReportText = (report: PlagiarismReport): string => {
   // Generate citations if similarity score is high enough
   let citationSuggestions = '';
-  if (report.score > 20) {
+  
+  if (report.citation_suggestions && Array.isArray(report.citation_suggestions) && report.citation_suggestions.length > 0) {
+    citationSuggestions = `
+Citation Suggestions:
+--------------------
+Based on content similarity, consider citing:
+${report.citation_suggestions.map(citation => 
+  `- ${citation.author || 'Unknown Author'} (${citation.date || 'n.d.'}). "${citation.title || 'Untitled'}". ${citation.publisher ? citation.publisher + '.' : ''} ${citation.url || ''}`
+).join('\n')}
+`;
+  } else if (report.score > 20) {
     citationSuggestions = `
 Citation Suggestions:
 --------------------

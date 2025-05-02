@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
@@ -8,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useSemanticSearch, SemanticSearchResult } from "@/hooks/use-semantic-search";
 
 interface Source {
   url: string;
@@ -28,6 +28,9 @@ const Index = () => {
   const [similarityScore, setSimilarityScore] = useState(0);
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
   const cseId = "a52863c5312114c0a";
+
+  const { searchSimilarContent, isSearching: isSemanticSearching } = useSemanticSearch();
+  const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
 
   const findRealSources = async (text: string) => {
     try {
@@ -197,6 +200,69 @@ const Index = () => {
     }
   };
 
+  const findSources = async (text: string) => {
+    try {
+      setIsSearchingSources(true);
+      
+      // First search for traditional matches using the existing approach
+      await findRealSources(text);
+      
+      // Then perform semantic search to find potential paraphrased content
+      const semanticMatches = await searchSimilarContent(text);
+      setSemanticResults(semanticMatches);
+      
+      // If semantic matching found additional matches that traditional search didn't
+      if (semanticMatches && semanticMatches.some(result => result.matches.length > 0)) {
+        const additionalSources = semanticMatches
+          .filter(result => result.matches.length > 0)
+          .flatMap(result => result.matches.map(match => ({
+            url: match.source_url || "https://semantic-match.example.com",
+            title: match.source_title || "Semantic Match",
+            matchPercentage: Math.round(match.similarity * 100),
+            matchedText: result.paragraph,
+            type: "academic" as const,
+            publicationDate: match.publication_date || new Date().toISOString().split('T')[0],
+            context: match.content
+          })));
+
+        if (additionalSources.length > 0) {
+          // Combine the results from both search methods
+          setSources(prevSources => {
+            // Create a map of existing URLs to avoid duplicates
+            const existingUrls = new Set(prevSources.map(source => source.url));
+            
+            // Filter out any sources that have the same URL
+            const uniqueAdditionalSources = additionalSources.filter(
+              source => !existingUrls.has(source.url)
+            );
+            
+            return [...prevSources, ...uniqueAdditionalSources].sort(
+              (a, b) => b.matchPercentage - a.matchPercentage
+            );
+          });
+
+          // Adjust the similarity score to account for semantic matches
+          if (sources.length === 0) {
+            // If no traditional sources were found, use the semantic match percentages
+            const avgSemanticScore = Math.min(
+              Math.round(
+                additionalSources.reduce((sum, src) => sum + src.matchPercentage, 0) / 
+                additionalSources.length
+              ),
+              95
+            );
+            setSimilarityScore(avgSemanticScore);
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error("Error finding sources:", error);
+    } finally {
+      setIsSearchingSources(false);
+    }
+  };
+
   const generateHighlightedText = (text: string, detectedSources: Source[]) => {
     if (!text || detectedSources.length === 0) {
       return <div>{text}</div>;
@@ -249,7 +315,8 @@ const Index = () => {
     setOriginalText(text);
     
     try {
-      await findRealSources(text);
+      // Use the updated findSources function that includes semantic search
+      await findSources(text);
       
       setIsProcessing(false);
       setShowResults(true);
@@ -272,7 +339,8 @@ const Index = () => {
       const text = await file.text();
       setOriginalText(text);
       
-      await findRealSources(text);
+      // Use the updated findSources function that includes semantic search
+      await findSources(text);
       
       setIsProcessing(false);
       setShowResults(true);

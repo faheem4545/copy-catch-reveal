@@ -32,6 +32,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { SimilarityMeter } from "@/components/plagiarism";
 import { SourceQualityIndicator } from "@/components/plagiarism/SourceQualityIndicator";
+import { useCitationGenerator, CitationStyle } from "@/hooks/use-citation-generator";
 
 interface Source {
   url: string;
@@ -68,6 +69,8 @@ const ResultsDisplay = ({
     blog: true,
     unknown: true,
   });
+  const [activeCitationStyle, setActiveCitationStyle] = useState<CitationStyle>("apa");
+  const { generateCitation } = useCitationGenerator();
 
   const getScoreColor = () => {
     if (similarityScore < 20) return "text-green-600";
@@ -111,6 +114,18 @@ const ResultsDisplay = ({
     URL.revokeObjectURL(url);
     
     toast.success("Report downloaded successfully");
+  };
+
+  const handleCopyCitation = (source: Source) => {
+    const citation = generateCitation({
+      title: source.title,
+      url: source.url,
+      date: source.publicationDate,
+      // Add more metadata as needed
+    }, activeCitationStyle);
+
+    navigator.clipboard.writeText(citation);
+    toast.success("Citation copied to clipboard");
   };
 
   const filteredSources = sources.filter(source => {
@@ -324,6 +339,57 @@ const ResultsDisplay = ({
                             <ThumbsDown size={14} />
                           </Button>
                         </div>
+                      </div>
+                    </div>
+                    
+                    {/* Add citation generator */}
+                    <div className="mt-6 border-t pt-4">
+                      <h3 className="text-sm font-medium text-gray-700 mb-2">Citation</h3>
+                      <div className="bg-gray-50 p-3 rounded border">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex gap-2">
+                            <button 
+                              className={cn("px-2 py-1 text-xs rounded", 
+                                activeCitationStyle === "apa" ? "bg-blue-100 text-blue-800" : "bg-gray-100"
+                              )}
+                              onClick={() => setActiveCitationStyle("apa")}
+                            >
+                              APA
+                            </button>
+                            <button 
+                              className={cn("px-2 py-1 text-xs rounded", 
+                                activeCitationStyle === "mla" ? "bg-blue-100 text-blue-800" : "bg-gray-100"
+                              )}
+                              onClick={() => setActiveCitationStyle("mla")}
+                            >
+                              MLA
+                            </button>
+                            <button 
+                              className={cn("px-2 py-1 text-xs rounded", 
+                                activeCitationStyle === "chicago" ? "bg-blue-100 text-blue-800" : "bg-gray-100"
+                              )}
+                              onClick={() => setActiveCitationStyle("chicago")}
+                            >
+                              Chicago
+                            </button>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-xs"
+                            onClick={() => handleCopyCitation(sources[activeSourceId])}
+                          >
+                            <Copy size={12} className="mr-1" /> Copy
+                          </Button>
+                        </div>
+                        <p className="text-sm font-medium bg-white p-2 border rounded">
+                          {generateCitation({
+                            title: sources[activeSourceId].title,
+                            url: sources[activeSourceId].url,
+                            date: sources[activeSourceId].publicationDate,
+                            // Add other metadata as needed
+                          }, activeCitationStyle)}
+                        </p>
                       </div>
                     </div>
                   </div>
