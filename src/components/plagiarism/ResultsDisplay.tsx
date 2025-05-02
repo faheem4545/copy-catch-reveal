@@ -10,7 +10,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Copy
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,7 @@ import { toast } from "sonner";
 import { SimilarityMeter } from "@/components/plagiarism";
 import { SourceQualityIndicator } from "@/components/plagiarism/SourceQualityIndicator";
 import { useCitationGenerator, CitationStyle } from "@/hooks/use-citation-generator";
+import { cn } from "@/lib/utils";
 
 interface Source {
   url: string;

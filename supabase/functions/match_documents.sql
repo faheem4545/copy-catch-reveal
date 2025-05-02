@@ -1,8 +1,8 @@
 
-CREATE OR REPLACE FUNCTION public.match_documents(
+CREATE OR REPLACE FUNCTION match_documents (
   query_embedding vector,
-  similarity_threshold float,
-  match_count int
+  match_threshold float DEFAULT 0.8,
+  match_count int DEFAULT 5
 )
 RETURNS TABLE (
   id UUID,
@@ -26,8 +26,8 @@ BEGIN
     document_embeddings.author,
     document_embeddings.publication_date
   FROM document_embeddings
-  WHERE 1 - (document_embeddings.embedding <=> query_embedding) > similarity_threshold
-  ORDER BY document_embeddings.embedding <=> query_embedding
+  WHERE 1 - (document_embeddings.embedding <=> query_embedding) > match_threshold
+  ORDER BY similarity DESC
   LIMIT match_count;
 END;
 $$;

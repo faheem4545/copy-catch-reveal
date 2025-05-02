@@ -1,36 +1,55 @@
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/types/supabase";
 import { useAuth } from "@/context/AuthContext";
-import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 
-export type PlagiarismReport = Database["public"]["Tables"]["plagiarism_reports"]["Row"];
-
-export function usePlagiarismReports() {
-  const { user } = useAuth();
-  
-  return useQuery({
-    queryKey: ["plagiarism-reports", user?.id],
-    queryFn: async () => {
-      if (!user) {
-        return [];
-      }
-      
-      const { data, error } = await supabase
-        .from("plagiarism_reports")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching plagiarism reports:", error);
-        toast.error("Failed to load plagiarism reports");
-        throw error;
-      }
-      
-      return data as PlagiarismReport[];
-    },
-    enabled: !!user, // Only run the query if the user is logged in
-  });
+export interface CitationSource {
+  title?: string;
+  author?: string;
+  url?: string;
+  date?: string;
+  publisher?: string;
 }
+
+export interface PlagiarismReport {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  score: number;
+  word_count: number;
+  created_at: string;
+  status: string;
+  citation_suggestions?: CitationSource[];
+}
+
+export const usePlagiarismReports = () => {
+  const { user } = useAuth();
+
+  const fetchReports = async (): Promise<PlagiarismReport[]> => {
+    if (!user) {
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from("plagiarism_reports")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error fetching plagiarism reports:", error);
+      throw error;
+    }
+
+    return data || [];
+  };
+
+  return useQuery({
+    queryKey: ["plagiarismReports", user?.id],
+    queryFn: fetchReports,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
+};

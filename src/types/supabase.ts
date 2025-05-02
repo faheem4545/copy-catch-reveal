@@ -41,6 +41,7 @@ export interface Database {
           word_count: number
           created_at: string
           status: string
+          citation_suggestions?: Json[] | null
         }
         Insert: {
           id?: string
@@ -51,6 +52,7 @@ export interface Database {
           word_count: number
           created_at?: string
           status?: string
+          citation_suggestions?: Json[] | null
         }
         Update: {
           id?: string
@@ -61,6 +63,7 @@ export interface Database {
           word_count?: number
           created_at?: string
           status?: string
+          citation_suggestions?: Json[] | null
         }
         Relationships: [
           {
