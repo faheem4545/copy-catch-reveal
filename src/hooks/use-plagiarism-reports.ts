@@ -43,7 +43,19 @@ export const usePlagiarismReports = () => {
       throw error;
     }
 
-    return data || [];
+    // Transform the JSON data to match the CitationSource type
+    return (data || []).map(report => ({
+      ...report,
+      citation_suggestions: Array.isArray(report.citation_suggestions) 
+        ? report.citation_suggestions.map((citation: any) => ({
+            title: citation.title || undefined,
+            author: citation.author || undefined,
+            url: citation.url || undefined,
+            date: citation.date || undefined,
+            publisher: citation.publisher || undefined
+          }))
+        : undefined
+    }));
   };
 
   return useQuery({

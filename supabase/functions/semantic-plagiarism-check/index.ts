@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   try {
-    const { text, chunks = [], threshold = 0.8 } = await req.json();
+    const { text, chunks = [], threshold = 0.8, action = "search", sourceInfo = {} } = await req.json();
     
     if (!text || text.trim() === '') {
       return new Response(
@@ -56,51 +56,134 @@ serve(async (req) => {
             .filter(p => p.trim().length > 30)
             .slice(0, 20); // Limit to 20 paragraphs
 
-    // Process each chunk
-    const results = [];
-    for (const paragraph of textChunks) {
-      if (paragraph.trim().length < 30) continue;
+    if (action === "search") {
+      // Process each chunk for search
+      const results = [];
+      for (const paragraph of textChunks) {
+        if (paragraph.trim().length < 30) continue;
 
-      // Generate embedding for the paragraph
-      const embeddingResponse = await openai.createEmbedding({
-        model: "text-embedding-ada-002",
-        input: paragraph.trim(),
-      });
+        try {
+          // Generate embedding for the paragraph
+          const embeddingResponse = await openai.createEmbedding({
+            model: "text-embedding-ada-002",
+            input: paragraph.trim(),
+          });
 
-      const [{ embedding }] = embeddingResponse.data.data;
+          const [{ embedding }] = embeddingResponse.data.data;
 
-      // Search for similar content
-      const { data: similarDocs, error } = await supabase
-        .rpc('match_documents', {
-          query_embedding: embedding,
-          match_threshold: threshold,
-          match_count: 5
-        });
+          // Search for similar content
+          const { data: similarDocs, error } = await supabase
+            .rpc('match_documents', {
+              query_embedding: embedding,
+              match_threshold: threshold,
+              match_count: 5
+            });
 
-      if (error) {
-        console.error('Error searching for similar documents:', error);
-        continue;
+          if (error) {
+            console.error('Error searching for similar documents:', error);
+            continue;
+          }
+
+          if (similarDocs && similarDocs.length > 0) {
+            results.push({
+              paragraph,
+              matches: similarDocs.map(doc => ({
+                similarity: doc.similarity,
+                content: doc.content,
+                source_url: doc.source_url,
+                source_title: doc.source_title,
+                author: doc.author,
+                publication_date: doc.publication_date
+              }))
+            });
+          } else {
+            results.push({
+              paragraph,
+              matches: []
+            });
+          }
+        } catch (err) {
+          console.error(`Error processing paragraph for search: ${err.message}`);
+        }
       }
 
-      if (similarDocs && similarDocs.length > 0) {
-        results.push({
-          paragraph,
-          matches: similarDocs.map(doc => ({
-            similarity: doc.similarity,
-            content: doc.content,
-            source_url: doc.source_url,
-            source_title: doc.source_title,
-            author: doc.author,
-            publication_date: doc.publication_date
-          }))
-        });
-      }
+      return new Response(
+        JSON.stringify({ results }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    } 
+    else if (action === "embed") {
+      // Store paragraphs with their embeddings
+      const { url, title, author, date } = sourceInfo;
+      
+      const storedEmbeddings = await Promise.all(
+        textChunks.map(async (paragraph) => {
+          try {
+            if (paragraph.trim().length < 30) {
+              return { success: false, reason: 'Paragraph too short' };
+            }
+            
+            // Generate embedding for the paragraph
+            const embeddingResponse = await openai.createEmbedding({
+              model: "text-embedding-ada-002",
+              input: paragraph,
+            });
+
+            const [{ embedding }] = embeddingResponse.data.data;
+
+            // Create a content hash for deduplication
+            const contentHash = await crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(paragraph)
+            );
+            const hashHex = Array.from(new Uint8Array(contentHash))
+              .map(b => b.toString(16).padStart(2, "0"))
+              .join("");
+
+            // Store the embedding in the database
+            const { data, error } = await supabase
+              .from('document_embeddings')
+              .upsert({
+                content_hash: hashHex,
+                content: paragraph,
+                embedding,
+                source_url: url,
+                source_title: title,
+                author,
+                publication_date: date
+              })
+              .select('id');
+
+            if (error) {
+              console.error('Error storing embedding:', error);
+              return { success: false, error: error.message };
+            }
+
+            return {
+              id: data?.[0]?.id,
+              success: true,
+            };
+          } catch (error) {
+            console.error(`Error storing embedding: ${error.message}`);
+            return {
+              success: false,
+              error: error.message,
+            };
+          }
+        })
+      );
+
+      return new Response(
+        JSON.stringify({ success: true, results: storedEmbeddings }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     return new Response(
-      JSON.stringify({ results }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: "Invalid action specified" }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
+
   } catch (error) {
     console.error('Error in semantic plagiarism check:', error);
     

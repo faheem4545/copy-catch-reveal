@@ -39,7 +39,8 @@ export function useSemanticSearch() {
         body: { 
           text,
           chunks: paragraphs,
-          threshold 
+          threshold,
+          action: "search" // Explicitly set the action to search
         }
       });
 
@@ -58,9 +59,49 @@ export function useSemanticSearch() {
       setIsSearching(false);
     }
   };
+  
+  // New function to add content to the semantic database
+  const addContentToSemanticDb = async (text: string, sourceInfo?: {
+    url?: string;
+    title?: string;
+    author?: string;
+    date?: string;
+  }): Promise<boolean> => {
+    if (!text || text.trim() === '') {
+      return false;
+    }
+    
+    setIsSearching(true);
+    setError(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('semantic-plagiarism-check', {
+        body: { 
+          text,
+          action: "embed",
+          sourceInfo
+        }
+      });
+      
+      if (error) {
+        console.error('Error adding content to semantic database:', error);
+        setError(new Error(error.message || 'Error adding content to semantic database'));
+        return false;
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error in adding content to semantic database:', err);
+      setError(err instanceof Error ? err : new Error('Unknown error occurred'));
+      return false;
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   return {
     searchSimilarContent,
+    addContentToSemanticDb,
     isSearching,
     error
   };
