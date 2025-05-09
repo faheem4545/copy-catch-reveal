@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
 import FileUpload from "@/components/plagiarism/FileUpload";
-import ResultsDisplay from "@/components/plagiarism/ResultsDisplay";
+import ResultsDisplayExtended from "@/components/plagiarism/ResultsDisplayExtended";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,9 +30,15 @@ const Index = () => {
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
   const cseId = "a52863c5312114c0a";
 
-  const { searchSimilarContent, analyzeSourceReliability, isSearching: isSemanticSearching } = useSemanticSearch();
+  const { searchSimilarContent, analyzeSourceReliability, generateContentStatistics, isSearching: isSemanticSearching } = useSemanticSearch();
   const { saveCurrentReport, isSaving } = useSavedReports();
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
+  const [contentStats, setContentStats] = useState({
+    wordCount: 0,
+    sentenceCount: 0,
+    avgSentenceLength: 0,
+    complexityScore: 0
+  });
 
   const findRealSources = async (text: string) => {
     try {
@@ -207,6 +212,10 @@ const Index = () => {
     try {
       setIsSearchingSources(true);
       
+      // Generate content statistics
+      const stats = generateContentStatistics(text);
+      setContentStats(stats);
+      
       // First search for traditional matches using the existing approach
       await findRealSources(text);
       
@@ -366,6 +375,12 @@ const Index = () => {
     setSimilarityScore(0);
     setHighlightedText(null);
     setSemanticResults([]);
+    setContentStats({
+      wordCount: 0,
+      sentenceCount: 0,
+      avgSentenceLength: 0,
+      complexityScore: 0
+    });
   };
 
   const handleSaveReport = async () => {
@@ -428,7 +443,7 @@ const Index = () => {
             </TabsContent>
           </Tabs>
         ) : (
-          <ResultsDisplay
+          <ResultsDisplayExtended
             originalText={originalText}
             similarityScore={similarityScore}
             sources={sources}
@@ -438,6 +453,7 @@ const Index = () => {
             onReset={handleReset}
             onSave={handleSaveReport}
             isSaving={isSaving}
+            contentStats={contentStats}
           />
         )}
       </div>

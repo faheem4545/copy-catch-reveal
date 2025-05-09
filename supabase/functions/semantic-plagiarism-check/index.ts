@@ -15,7 +15,7 @@ serve(async (req) => {
   }
 
   try {
-    const { text, chunks = [], threshold = 0.8, action = "search", sourceInfo = {} } = await req.json();
+    const { text, chunks = [], threshold = 0.8, action = "search", sourceInfo = {}, searchOptions = {} } = await req.json();
     
     if (!text || text.trim() === '') {
       return new Response(
@@ -49,12 +49,50 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Default options for extraction
+    const options = {
+      minParagraphLength: searchOptions.minParagraphLength || 40,
+      maxParagraphs: searchOptions.maxParagraphs || 25,
+      excludeCommonPhrases: searchOptions.excludeCommonPhrases !== false // Default to true
+    };
+
+    // Common phrases to potentially exclude (if option enabled)
+    const commonPhrases = [
+      "in conclusion", 
+      "for example", 
+      "on the other hand",
+      "in summary",
+      "as a result",
+      "due to the fact that"
+    ];
+
+    // Improved text chunking that filters common phrases if enabled
+    const getTextChunks = (text: string) => {
+      // Split by paragraphs first
+      const paragraphs = text.split(/\n\n+/);
+      
+      return paragraphs
+        .filter(p => {
+          const trimmed = p.trim();
+          // Filter out very short paragraphs
+          if (trimmed.length < options.minParagraphLength) return false;
+          
+          // Optionally filter out paragraphs that are just common phrases
+          if (options.excludeCommonPhrases) {
+            const lowerText = trimmed.toLowerCase();
+            // Skip paragraphs that are just common transitional phrases
+            if (commonPhrases.some(phrase => lowerText === phrase)) return false;
+          }
+          
+          return true;
+        })
+        .slice(0, options.maxParagraphs); // Limit total paragraphs
+    };
+
     // Split text into paragraphs or use provided chunks
     const textChunks = chunks.length > 0 
       ? chunks 
-      : text.split(/\n\n+/)
-            .filter(p => p.trim().length > 30)
-            .slice(0, 20); // Limit to 20 paragraphs
+      : getTextChunks(text);
 
     if (action === "search") {
       // Process each chunk for search
@@ -71,12 +109,12 @@ serve(async (req) => {
 
           const [{ embedding }] = embeddingResponse.data.data;
 
-          // Search for similar content
+          // Search for similar content with improved matching
           const { data: similarDocs, error } = await supabase
             .rpc('match_documents', {
               query_embedding: embedding,
               match_threshold: threshold,
-              match_count: 5
+              match_count: 10 // Increased from 5
             });
 
           if (error) {
@@ -84,10 +122,19 @@ serve(async (req) => {
             continue;
           }
 
-          if (similarDocs && similarDocs.length > 0) {
+          // Filter out results with very low similarity if we have enough matches
+          let filteredResults = similarDocs || [];
+          if (filteredResults.length > 5) {
+            // If we have many results, we can be more selective
+            filteredResults = filteredResults
+              .sort((a, b) => b.similarity - a.similarity)
+              .slice(0, 5);
+          }
+
+          if (filteredResults.length > 0) {
             results.push({
               paragraph,
-              matches: similarDocs.map(doc => ({
+              matches: filteredResults.map(doc => ({
                 similarity: doc.similarity,
                 content: doc.content,
                 source_url: doc.source_url,
@@ -107,14 +154,28 @@ serve(async (req) => {
         }
       }
 
+      // Calculate content statistics to include with results
+      const contentStats = {
+        analyzedParagraphs: textChunks.length,
+        totalWordCount: text.split(/\s+/).filter(Boolean).length,
+        paragraphsWithMatches: results.filter(r => r.matches.length > 0).length,
+        averageSimilarity: results.reduce((sum, r) => {
+          const avgSim = r.matches.reduce((s, m) => s + m.similarity, 0) / (r.matches.length || 1);
+          return sum + (r.matches.length ? avgSim : 0);
+        }, 0) / (results.filter(r => r.matches.length > 0).length || 1)
+      };
+
       return new Response(
-        JSON.stringify({ results }),
+        JSON.stringify({ 
+          results,
+          stats: contentStats
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } 
     else if (action === "embed") {
       // Store paragraphs with their embeddings
-      const { url, title, author, date } = sourceInfo;
+      const { url, title, author, date, publisher } = sourceInfo;
       
       const storedEmbeddings = await Promise.all(
         textChunks.map(async (paragraph) => {
@@ -174,7 +235,50 @@ serve(async (req) => {
       );
 
       return new Response(
-        JSON.stringify({ success: true, results: storedEmbeddings }),
+        JSON.stringify({ 
+          success: true, 
+          results: storedEmbeddings, 
+          stats: {
+            total: storedEmbeddings.length,
+            successful: storedEmbeddings.filter(e => e.success).length
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    else if (action === "analyze") {
+      // New function to analyze text similarity without storing
+      // This is useful for quick checks without embedding or storing data
+      
+      // Generate embedding for input text
+      const embeddingResponse = await openai.createEmbedding({
+        model: "text-embedding-ada-002",
+        input: text.substring(0, 8000), // Limit to avoid token limitations
+      });
+
+      const [{ embedding }] = embeddingResponse.data.data;
+
+      // Search for similar content
+      const { data: similarDocs, error } = await supabase
+        .rpc('match_documents', {
+          query_embedding: embedding,
+          match_threshold: threshold,
+          match_count: 10
+        });
+
+      if (error) {
+        throw new Error(`Error analyzing text: ${error.message}`);
+      }
+
+      // Return analysis results
+      return new Response(
+        JSON.stringify({ 
+          matches: similarDocs || [],
+          similarity_score: similarDocs && similarDocs.length > 0
+            ? Math.max(...similarDocs.map(doc => doc.similarity)) * 100
+            : 0,
+          has_matches: (similarDocs || []).length > 0
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
