@@ -65,11 +65,14 @@ export const usePlagiarismReports = () => {
       throw new Error("User must be logged in to save reports");
     }
 
+    // Convert citation_suggestions to JSON compatible format before saving
     const newReport = {
       user_id: user.id,
       ...report,
       word_count: report.content.split(/\s+/).filter(Boolean).length,
-      status: "completed"
+      status: "completed",
+      // Convert to a plain object array for Supabase
+      citation_suggestions: report.citation_suggestions ? JSON.parse(JSON.stringify(report.citation_suggestions)) : undefined
     };
 
     const { data, error } = await supabase
@@ -83,7 +86,19 @@ export const usePlagiarismReports = () => {
       throw error;
     }
 
-    return data;
+    // Convert back to CitationSource[] format for consistent types throughout the app
+    return {
+      ...data,
+      citation_suggestions: Array.isArray(data.citation_suggestions)
+        ? data.citation_suggestions.map((citation: any) => ({
+            title: citation.title || undefined,
+            author: citation.author || undefined,
+            url: citation.url || undefined, 
+            date: citation.date || undefined,
+            publisher: citation.publisher || undefined
+          }))
+        : undefined
+    };
   };
 
   // New function to delete a report
@@ -104,6 +119,14 @@ export const usePlagiarismReports = () => {
     }
   };
 
+  // Query for fetching reports
+  const reportsQuery = useQuery({
+    queryKey: ["plagiarismReports", user?.id],
+    queryFn: fetchReports,
+    enabled: !!user,
+    refetchOnWindowFocus: false,
+  });
+
   // New mutation to save reports
   const saveMutation = useMutation({
     mutationFn: saveReport,
@@ -122,12 +145,7 @@ export const usePlagiarismReports = () => {
   });
 
   return {
-    reports: useQuery({
-      queryKey: ["plagiarismReports", user?.id],
-      queryFn: fetchReports,
-      enabled: !!user,
-      refetchOnWindowFocus: false,
-    }),
+    reports: reportsQuery,
     saveReport: saveMutation.mutate,
     deleteReport: deleteMutation.mutate,
     isSaving: saveMutation.isPending,

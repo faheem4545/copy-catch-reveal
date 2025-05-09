@@ -18,10 +18,9 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
   const { 
-    data: reports, 
-    isLoading: reportsLoading, 
-    error: reportsError,
-    refetch
+    reports,
+    saveReport,
+    isSaving
   } = usePlagiarismReports();
 
   useEffect(() => {
@@ -31,11 +30,11 @@ const Dashboard = () => {
   }, [user, authLoading, navigate]);
 
   useEffect(() => {
-    if (reportsError) {
+    if (reports.error) {
       toast.error("Failed to load your reports. Please try again later.");
-      console.error(reportsError);
+      console.error(reports.error);
     }
-  }, [reportsError]);
+  }, [reports.error]);
 
   const handleSubmitText = async (text: string) => {
     if (!user) {
@@ -53,27 +52,16 @@ const Dashboard = () => {
       const score = Math.floor(Math.random() * 100);
       const wordCount = text.split(/\s+/).filter(Boolean).length;
       
-      // Store the report in Supabase
-      const { data, error } = await supabase
-        .from("plagiarism_reports")
-        .insert({
-          user_id: user.id,
-          title: `Report ${new Date().toLocaleString()}`,
-          content: text,
-          score: score,
-          word_count: wordCount,
-          status: "completed"
-        })
-        .select();
-      
-      if (error) {
-        console.error("Error creating report:", error);
-        toast.error("Failed to save plagiarism report");
-        throw error;
-      }
+      await saveReport({
+        title: `Report ${new Date().toLocaleString()}`,
+        content: text,
+        score: score,
+        word_count: wordCount,
+        status: "completed"
+      });
       
       toast.success("Plagiarism check completed");
-      refetch(); // Refresh the reports list
+      reports.refetch(); // Refresh the reports list
       
     } catch (err) {
       console.error("Error during plagiarism check:", err);
@@ -88,7 +76,7 @@ const Dashboard = () => {
   }
 
   // Show loading state for the entire dashboard while reports are loading
-  if (reportsLoading) {
+  if (reports.isLoading) {
     return (
       <Layout>
         <div className="mb-6">
@@ -129,11 +117,12 @@ const Dashboard = () => {
   }
 
   // Calculate real statistics from the actual reports data
-  const averageScore = reports?.length
-    ? Math.round(reports.reduce((acc, report) => acc + report.score, 0) / reports.length)
+  const reportsData = reports.data || [];
+  const averageScore = reportsData.length
+    ? Math.round(reportsData.reduce((acc, report) => acc + report.score, 0) / reportsData.length)
     : 0;
 
-  const totalWords = reports?.reduce((acc, report) => acc + report.word_count, 0) || 0;
+  const totalWords = reportsData.reduce((acc, report) => acc + report.word_count, 0) || 0;
 
   return (
     <Layout>
@@ -160,7 +149,7 @@ const Dashboard = () => {
           <CardContent>
             <div className="flex items-center">
               <FileText className="h-8 w-8 text-purple-600 mr-4" />
-              <span className="text-3xl font-bold">{reports?.length || 0}</span>
+              <span className="text-3xl font-bold">{reportsData.length}</span>
             </div>
           </CardContent>
         </Card>
@@ -193,14 +182,14 @@ const Dashboard = () => {
       <Card>
         <CardHeader>
           <CardTitle>Recent Reports</CardTitle>
-          {reports && reports.length === 0 && (
+          {reportsData.length === 0 && (
             <CardDescription>
               You haven't created any reports yet. Start by checking your first document.
             </CardDescription>
           )}
         </CardHeader>
         <CardContent>
-          <Reports reports={reports || []} isLoading={reportsLoading} />
+          <Reports reports={reportsData} isLoading={reports.isLoading} />
         </CardContent>
       </Card>
       
@@ -208,7 +197,7 @@ const Dashboard = () => {
         <div className="mt-4 p-4 bg-gray-50 rounded border text-sm">
           <p className="font-medium">Debug Info (will be removed in production):</p>
           <p>User ID: {user.id}</p>
-          <p>Reports count: {reports?.length || 0}</p>
+          <p>Reports count: {reportsData.length}</p>
         </div>
       )}
     </Layout>

@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { usePlagiarismReports, PlagiarismReport } from "./use-plagiarism-reports";
+import { usePlagiarismReports, PlagiarismReport, CitationSource } from "./use-plagiarism-reports";
 import { toast } from "sonner";
 
 export interface SaveReportOptions {
@@ -17,7 +17,7 @@ export function useSavedReports() {
     content: string, 
     score: number, 
     options: SaveReportOptions,
-    citationSuggestions?: any[]
+    citationSuggestions?: CitationSource[]
   ) => {
     setIsSaving(true);
     
