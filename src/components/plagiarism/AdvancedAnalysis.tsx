@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +108,11 @@ const AdvancedAnalysis: React.FC<AdvancedAnalysisProps> = ({
                 <Progress 
                   className="mt-4" 
                   value={similarityScore} 
-                  indicatorColor={risk.level === 'High' ? 'bg-red-500' : risk.level === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}
+                  indicatorClassName={
+                    risk.level === 'High' ? 'bg-red-500' : 
+                    risk.level === 'Medium' ? 'bg-yellow-500' : 
+                    'bg-green-500'
+                  }
                 />
                 <div className="mt-1 text-sm text-muted-foreground">
                   {similarityScore}% similarity detected
