@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import TextInput from "@/components/plagiarism/TextInput";
@@ -8,6 +9,7 @@ import { FileCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSemanticSearch, SemanticSearchResult } from "@/hooks/use-semantic-search";
+import { useSavedReports } from "@/hooks/use-saved-reports";
 
 interface Source {
   url: string;
@@ -29,7 +31,8 @@ const Index = () => {
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
   const cseId = "a52863c5312114c0a";
 
-  const { searchSimilarContent, isSearching: isSemanticSearching } = useSemanticSearch();
+  const { searchSimilarContent, analyzeSourceReliability, isSearching: isSemanticSearching } = useSemanticSearch();
+  const { saveCurrentReport, isSaving } = useSavedReports();
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
 
   const findRealSources = async (text: string) => {
@@ -207,8 +210,9 @@ const Index = () => {
       // First search for traditional matches using the existing approach
       await findRealSources(text);
       
-      // Then perform semantic search to find potential paraphrased content
-      const semanticMatches = await searchSimilarContent(text);
+      // Perform semantic search with improved options
+      const semanticOptions = { minParagraphLength: 40, threshold: 0.75, maxParagraphs: 25 };
+      const semanticMatches = await searchSimilarContent(text, semanticOptions.threshold);
       setSemanticResults(semanticMatches);
       
       // If semantic matching found additional matches that traditional search didn't
@@ -254,6 +258,12 @@ const Index = () => {
             setSimilarityScore(avgSemanticScore);
           }
         }
+      }
+      
+      // Analyze source reliability if sources are available
+      if (sources.length > 0) {
+        const reliabilityAnalysis = analyzeSourceReliability(sources);
+        console.log("Source reliability analysis:", reliabilityAnalysis);
       }
       
     } catch (error) {
@@ -315,7 +325,6 @@ const Index = () => {
     setOriginalText(text);
     
     try {
-      // Use the updated findSources function that includes semantic search
       await findSources(text);
       
       setIsProcessing(false);
@@ -339,7 +348,6 @@ const Index = () => {
       const text = await file.text();
       setOriginalText(text);
       
-      // Use the updated findSources function that includes semantic search
       await findSources(text);
       
       setIsProcessing(false);
@@ -357,6 +365,31 @@ const Index = () => {
     setSources([]);
     setSimilarityScore(0);
     setHighlightedText(null);
+    setSemanticResults([]);
+  };
+
+  const handleSaveReport = async () => {
+    try {
+      // Extract citation suggestions from sources
+      const citationSuggestions = sources.map(source => ({
+        title: source.title,
+        url: source.url,
+        date: source.publicationDate,
+        author: undefined,
+        publisher: undefined
+      }));
+      
+      await saveCurrentReport(
+        originalText,
+        similarityScore,
+        { title: `Plagiarism Report - ${new Date().toLocaleString()}` },
+        citationSuggestions
+      );
+      
+    } catch (error) {
+      console.error("Error saving report:", error);
+      toast.error("Failed to save report");
+    }
   };
 
   useEffect(() => {
@@ -400,8 +433,11 @@ const Index = () => {
             similarityScore={similarityScore}
             sources={sources}
             highlightedText={highlightedText}
-            isSearchingSources={isSearchingSources}
+            isSearchingSources={isSearchingSources || isSemanticSearching}
+            semanticResults={semanticResults}
             onReset={handleReset}
+            onSave={handleSaveReport}
+            isSaving={isSaving}
           />
         )}
       </div>
