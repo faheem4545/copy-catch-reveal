@@ -10,18 +10,22 @@ import {
   ExternalLink,
   ThumbsUp,
   ThumbsDown,
-  SearchIcon
+  SearchIcon,
+  Wand2
 } from "lucide-react";
 import SimilarityMeter from "./SimilarityMeter";
 import SourceQualityIndicator from "./SourceQualityIndicator";
 import ComparisonView from "./ComparisonView";
 import FeedbackForm from "./FeedbackForm";
 import AdvancedAnalysis from "./AdvancedAnalysis";
+import ParaphraseAssistant from "./ParaphraseAssistant";
+import PlagiarismClassifier from "./PlagiarismClassifier";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { SemanticSearchResult } from "@/hooks/use-semantic-search";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export interface Source {
   url: string;
@@ -66,6 +70,8 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
   const [comparisonSource, setComparisonSource] = useState<Source | null>(null);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isParaphraseOpen, setIsParaphraseOpen] = useState(false);
+  const [currentTextToParaphrase, setCurrentTextToParaphrase] = useState("");
   const [feedbackSource, setFeedbackSource] = useState<{
     id: string;
     matchPercentage: number;
@@ -84,6 +90,11 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
   const handleOpenFeedback = (sourceId: string, matchPercentage: number, sourceUrl: string) => {
     setFeedbackSource({ id: sourceId, matchPercentage, sourceUrl });
     setIsFeedbackOpen(true);
+  };
+
+  const handleOpenParaphraser = (text?: string) => {
+    setCurrentTextToParaphrase(text || "");
+    setIsParaphraseOpen(true);
   };
 
   return (
@@ -112,12 +123,15 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
 
       {/* Main Content */}
       <Tabs defaultValue="results" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-4">
+        <TabsList className="grid w-full grid-cols-4 mb-4">
           <TabsTrigger value="results" className="flex gap-2 items-center">
             <AlignLeft className="h-4 w-4" /> Results
           </TabsTrigger>
           <TabsTrigger value="analysis" className="flex gap-2 items-center">
             <BarChart3 className="h-4 w-4" /> Advanced Analysis
+          </TabsTrigger>
+          <TabsTrigger value="paraphrase" className="flex gap-2 items-center">
+            <Wand2 className="h-4 w-4" /> Paraphrase
           </TabsTrigger>
           <TabsTrigger value="original" className="flex gap-2 items-center">
             <SearchIcon className="h-4 w-4" /> Original Text
@@ -190,6 +204,12 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Plagiarism Classification */}
+              <PlagiarismClassifier 
+                similarityScore={similarityScore}
+                contentLength={contentStats.wordCount}
+              />
             </div>
             
             <div className="md:w-1/2">
@@ -249,28 +269,39 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
                                 size="sm"
                                 variant="outline"
                                 className="text-xs"
+                                onClick={() => handleParaphraser(source.matchedText)}
+                              >
+                                <Wand2 className="h-3 w-3 mr-1" />
+                                Paraphrase
+                              </Button>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs"
                                 onClick={() => handleOpenFeedback(`source-${index}`, source.matchPercentage, source.url)}
                               >
                                 <ThumbsUp className="h-3 w-3 mr-1" /> Feedback
                               </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-xs"
+                                      onClick={() => window.open(source.url, "_blank")}
+                                    >
+                                      <ExternalLink className="h-3 w-3 mr-1" /> Visit
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Visit source</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             </div>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-xs"
-                                    onClick={() => window.open(source.url, "_blank")}
-                                  >
-                                    <ExternalLink className="h-3 w-3 mr-1" /> Visit
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Visit source</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
                           </div>
                         </div>
                       ))}
@@ -287,7 +318,17 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
 
           <Card>
             <CardHeader>
-              <CardTitle>Highlighted Text</CardTitle>
+              <CardTitle className="flex justify-between items-center">
+                <span>Highlighted Text</span>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => handleOpenParaphraser(originalText)}
+                >
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Paraphrase All
+                </Button>
+              </CardTitle>
               <CardDescription>
                 Yellow highlighted sections indicate potential similarity with other sources
               </CardDescription>
@@ -308,6 +349,10 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
             semanticResults={semanticResults}
             contentStats={contentStats}
           />
+        </TabsContent>
+
+        <TabsContent value="paraphrase">
+          <ParaphraseAssistant initialText={currentTextToParaphrase} />
         </TabsContent>
 
         <TabsContent value="original">
@@ -341,6 +386,20 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
         matchPercentage={feedbackSource.matchPercentage}
         sourceUrl={feedbackSource.sourceUrl}
       />
+
+      {/* Paraphraser Dialog */}
+      <Dialog open={isParaphraseOpen} onOpenChange={setIsParaphraseOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>AI Paraphrasing Assistant</DialogTitle>
+          </DialogHeader>
+          <ParaphraseAssistant 
+            initialText={currentTextToParaphrase}
+            onClose={() => setIsParaphraseOpen(false)}
+            onSelect={(text) => setIsParaphraseOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

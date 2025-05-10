@@ -31,3 +31,6 @@ enable_refresh_token_rotation = true
 [functions.semantic-plagiarism-check]
 verify_jwt = true
 
+[functions.paraphrase-content]
+verify_jwt = true
+
