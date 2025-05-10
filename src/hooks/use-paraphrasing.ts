@@ -41,7 +41,13 @@ export function useParaphrasing() {
       if (error) {
         console.error('Error paraphrasing text:', error);
         setError(new Error(error.message || 'Error paraphrasing text'));
-        toast.error("Failed to paraphrase text. Please try again.");
+        
+        // Check if this is a quota exceeded error based on the response
+        if (error.message?.includes('429') || error.message?.includes('quota')) {
+          toast.error("OpenAI API quota exceeded. Please check your billing details or try again later.");
+        } else {
+          toast.error("Failed to paraphrase text. Please try again.");
+        }
         return null;
       }
 
@@ -57,7 +63,13 @@ export function useParaphrasing() {
     } catch (err) {
       console.error('Error in paraphrasing:', err);
       setError(err instanceof Error ? err : new Error('Unknown error occurred'));
-      toast.error("An unexpected error occurred during paraphrasing.");
+      
+      // Add more user-friendly error message
+      if (err instanceof Error && err.message.includes('non-2xx status code')) {
+        toast.error("OpenAI service temporarily unavailable. Please try again later.");
+      } else {
+        toast.error("An unexpected error occurred during paraphrasing.");
+      }
       return null;
     } finally {
       setIsLoading(false);

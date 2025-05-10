@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, ArrowRight, Copy, Wand2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Copy, Wand2, AlertTriangle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -110,10 +110,20 @@ const ParaphraseAssistant: React.FC<ParaphraseAssistantProps> = ({
               </Button>
 
               {paraphraseError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
+                <Alert variant={paraphraseError.message?.includes('quota') ? "warning" : "destructive"}>
+                  {paraphraseError.message?.includes('quota') ? (
+                    <AlertTriangle className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
                   <AlertDescription>
-                    Error: {paraphraseError.message}
+                    {paraphraseError.message?.includes('quota') ? (
+                      <>
+                        OpenAI API quota exceeded. The application owner needs to check their OpenAI account billing details.
+                      </>
+                    ) : (
+                      <>Error: {paraphraseError.message}</>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

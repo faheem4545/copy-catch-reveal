@@ -53,69 +53,57 @@ serve(async (req) => {
       ? `Context: ${context}\n\nOriginal text: "${text}"\n\n${paraphraseInstructions}`
       : `Original text: "${text}"\n\n${paraphraseInstructions}`;
 
-    // Fix: Use fetch directly instead of the OpenAI client library which is causing issues
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are an academic paraphrasing assistant. Your job is to help users avoid plagiarism by rewriting text while preserving the original meaning. Provide well-structured, natural sounding alternatives that effectively communicate the same information."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      })
-    });
+    try {
+      // Use fetch directly instead of the OpenAI client library which is causing issues
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are an academic paraphrasing assistant. Your job is to help users avoid plagiarism by rewriting text while preserving the original meaning. Provide well-structured, natural sounding alternatives that effectively communicate the same information."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        })
+      });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("OpenAI API error:", errorData);
-      return new Response(
-        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
-      );
-    }
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("OpenAI API error:", errorData);
+        
+        // Handle quota exceeded error specially
+        if (errorData.error?.code === "insufficient_quota") {
+          return new Response(
+            JSON.stringify({ 
+              error: "OpenAI API quota exceeded. Please check your billing details or try again later.",
+              quotaExceeded: true
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
 
-    const responseData = await response.json();
-    const paraphrasedText = responseData.choices[0].message?.content || "";
+      const responseData = await response.json();
+      const paraphrasedText = responseData.choices[0].message?.content || "";
 
-    // Also generate a short explanation of changes made
-    const explanationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful writing assistant. Briefly explain the changes made during paraphrasing in 1-2 short sentences."
-          },
-          {
-            role: "user",
-            content: `Original: "${text}"\nParaphrased: "${paraphrasedText}"\n\nExplain very briefly what changes were made.`
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 100,
-      })
-    });
-
-    if (!explanationResponse.ok) {
-      console.error("Error generating explanation");
-      const explanation = "Text was paraphrased to reduce similarity while maintaining original meaning.";
+      // Since API quota is limited, let's provide a simpler explanation instead of making another API call
+      const explanation = "Text has been paraphrased to reduce similarity while maintaining original meaning.";
       
       return new Response(
         JSON.stringify({ 
@@ -125,19 +113,14 @@ serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    } catch (error) {
+      console.error("Error calling OpenAI API:", error);
+      return new Response(
+        JSON.stringify({ error: "Failed to connect to OpenAI API. Please try again later." }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
     }
 
-    const explanationData = await explanationResponse.json();
-    const explanation = explanationData.choices[0].message?.content || "Text was paraphrased while maintaining original meaning.";
-
-    return new Response(
-      JSON.stringify({ 
-        original: text,
-        paraphrased: paraphrasedText, 
-        explanation: explanation
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
   } catch (error) {
     console.error('Error in paraphrase function:', error);
     
