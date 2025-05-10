@@ -1,211 +1,155 @@
 
 import React, { useState } from "react";
-import { useParaphrasing } from "@/hooks/use-paraphrasing";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import { AlertCircle, ArrowRight, Copy, Wand2, AlertTriangle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useParaphrasing } from "@/hooks/use-paraphrasing";
+import { Loader2, RotateCcw, Wand2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
+type SeverityLevel = "low" | "medium" | "high";
 
 interface ParaphraseAssistantProps {
-  initialText?: string;
-  onClose?: () => void;
-  onSelect?: (paraphrasedText: string) => void;
+  textToParaphrase?: string;
+  originalContext?: string;
+  onParaphrased?: (original: string, paraphrased: string) => void;
 }
 
 const ParaphraseAssistant: React.FC<ParaphraseAssistantProps> = ({
-  initialText = "",
-  onClose,
-  onSelect
+  textToParaphrase = "",
+  originalContext = "",
+  onParaphrased
 }) => {
-  const [text, setText] = useState(initialText);
-  const [severity, setSeverity] = useState<"low" | "medium" | "high">("medium");
-  const { 
-    paraphraseText, 
-    isParaphrasing, 
-    paraphraseResult, 
-    paraphraseError, 
-    clearResult 
-  } = useParaphrasing();
+  const [text, setText] = useState(textToParaphrase);
+  const [context, setContext] = useState(originalContext);
+  const [severity, setSeverity] = useState<SeverityLevel>("medium");
+  const { paraphraseText, isParaphrasing, paraphraseResult, paraphraseError, clearResult } = useParaphrasing();
 
   const handleParaphrase = async () => {
-    await paraphraseText(text, "", severity);
-  };
-
-  const handleCopyToClipboard = () => {
-    if (paraphraseResult?.paraphrased) {
-      navigator.clipboard.writeText(paraphraseResult.paraphrased);
-      toast.success("Copied to clipboard");
+    if (!text.trim()) return;
+    
+    try {
+      const result = await paraphraseText(text, context, severity);
+      if (result && onParaphrased) {
+        onParaphrased(result.original, result.paraphrased);
+      }
+    } catch (error) {
+      console.error("Error in paraphrasing assistant:", error);
     }
   };
 
-  const handleUseParaphrased = () => {
-    if (paraphraseResult?.paraphrased && onSelect) {
-      onSelect(paraphraseResult.paraphrased);
-      toast.success("Paraphrased text applied");
-    }
+  const handleReset = () => {
+    setText("");
+    setContext("");
+    clearResult();
   };
+
+  // Check if the error is related to quota or rate limiting
+  const isQuotaError = paraphraseError?.message?.toLowerCase().includes('quota') || 
+                       paraphraseError?.message?.toLowerCase().includes('rate limit') ||
+                       paraphraseError?.message?.toLowerCase().includes('429');
 
   return (
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Wand2 className="h-5 w-5 mr-2" />
+          <Wand2 className="mr-2 h-5 w-5" />
           AI Paraphrasing Assistant
         </CardTitle>
         <CardDescription>
-          Get AI-powered suggestions to rewrite potentially problematic text
+          Rewrite text to avoid plagiarism while preserving meaning
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {!paraphraseResult ? (
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <label className="text-sm font-medium">Text to Paraphrase</label>
-                  <Select 
-                    value={severity}
-                    onValueChange={(value) => setSeverity(value as "low" | "medium" | "high")}
-                  >
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="Paraphrase Strength" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Light Revision</SelectItem>
-                      <SelectItem value="medium">Moderate Rewrite</SelectItem>
-                      <SelectItem value="high">Complete Rewrite</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Enter text to paraphrase..."
-                  className="min-h-[150px]"
-                />
-              </div>
 
-              <Button 
-                onClick={handleParaphrase} 
-                disabled={isParaphrasing || !text.trim()} 
-                className="w-full"
-              >
-                {isParaphrasing ? (
-                  <>
-                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                    Generating paraphrase...
-                  </>
-                ) : (
-                  <>
-                    <Wand2 className="h-4 w-4 mr-2" />
-                    Generate Paraphrased Version
-                  </>
-                )}
-              </Button>
+      <CardContent className="space-y-4">
+        {paraphraseError && (
+          <Alert variant={isQuotaError ? "destructive" : "default"}>
+            <AlertTitle>
+              {isQuotaError ? "API Quota Exceeded" : "Error"}
+            </AlertTitle>
+            <AlertDescription>
+              {isQuotaError 
+                ? "OpenAI API quota exceeded. Please try again later or check your billing details."
+                : "An error occurred while paraphrasing. Please try again."}
+            </AlertDescription>
+          </Alert>
+        )}
 
-              {paraphraseError && (
-                <Alert variant={paraphraseError.message?.includes('quota') ? "warning" : "destructive"}>
-                  {paraphraseError.message?.includes('quota') ? (
-                    <AlertTriangle className="h-4 w-4" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4" />
-                  )}
-                  <AlertDescription>
-                    {paraphraseError.message?.includes('quota') ? (
-                      <>
-                        OpenAI API quota exceeded. The application owner needs to check their OpenAI account billing details.
-                      </>
-                    ) : (
-                      <>Error: {paraphraseError.message}</>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Badge variant={
-                  severity === "high" ? "destructive" : 
-                  severity === "medium" ? "default" : 
-                  "outline"
-                }>
-                  {severity === "high" ? "Complete Rewrite" : 
-                   severity === "medium" ? "Moderate Rewrite" : 
-                   "Light Revision"}
-                </Badge>
-                <Button variant="outline" size="sm" onClick={clearResult}>
-                  Try Another
-                </Button>
-              </div>
-
-              <Tabs defaultValue="comparison">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="comparison">Comparison</TabsTrigger>
-                  <TabsTrigger value="result">Result Only</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="comparison" className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <div className="font-medium text-sm">Original</div>
-                      <div className="p-3 bg-muted/50 rounded-md text-sm whitespace-pre-wrap">
-                        {paraphraseResult.original}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="font-medium text-sm flex items-center gap-2">
-                        <ArrowRight className="h-4 w-4" />
-                        Paraphrased
-                      </div>
-                      <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/50 rounded-md text-sm whitespace-pre-wrap">
-                        {paraphraseResult.paraphrased}
-                      </div>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="result">
-                  <div className="space-y-2">
-                    <div className="font-medium text-sm">Paraphrased Version</div>
-                    <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/50 rounded-md text-sm whitespace-pre-wrap">
-                      {paraphraseResult.paraphrased}
-                    </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <div>
-                <div className="font-medium text-sm mb-2">AI Explanation</div>
-                <div className="text-sm text-muted-foreground italic border-l-2 pl-3 py-1">
-                  {paraphraseResult.explanation}
-                </div>
-              </div>
-            </div>
-          )}
+        <div>
+          <label className="block text-sm font-medium mb-2">Text to paraphrase</label>
+          <Textarea
+            placeholder="Enter text that needs paraphrasing..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            className="w-full"
+          />
         </div>
+        
+        <div>
+          <label className="block text-sm font-medium mb-2">Original context (optional)</label>
+          <Textarea
+            placeholder="Enter surrounding context to improve paraphrasing quality..."
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            rows={3}
+            className="w-full"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Paraphrasing intensity</label>
+          <div className="flex space-x-2">
+            <Button
+              variant={severity === "low" ? "default" : "outline"}
+              onClick={() => setSeverity("low")}
+              size="sm"
+            >
+              Light
+            </Button>
+            <Button
+              variant={severity === "medium" ? "default" : "outline"}
+              onClick={() => setSeverity("medium")}
+              size="sm"
+            >
+              Medium
+            </Button>
+            <Button
+              variant={severity === "high" ? "default" : "outline"}
+              onClick={() => setSeverity("high")}
+              size="sm"
+            >
+              Strong
+            </Button>
+          </div>
+        </div>
+
+        {paraphraseResult && (
+          <div>
+            <label className="block text-sm font-medium mb-2">Paraphrased result</label>
+            <div className="bg-secondary/50 p-3 rounded-md whitespace-pre-wrap">
+              {paraphraseResult.paraphrased}
+            </div>
+          </div>
+        )}
       </CardContent>
       
-      {paraphraseResult && (
-        <CardFooter className="flex justify-end gap-2 border-t pt-4">
-          <Button variant="outline" onClick={handleCopyToClipboard}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copy
-          </Button>
-          {onSelect && (
-            <Button onClick={handleUseParaphrased}>
-              Use This Version
-            </Button>
+      <CardFooter className="flex justify-between">
+        <Button variant="ghost" onClick={handleReset} disabled={isParaphrasing}>
+          <RotateCcw className="mr-2 h-4 w-4" /> Reset
+        </Button>
+        <Button onClick={handleParaphrase} disabled={!text.trim() || isParaphrasing}>
+          {isParaphrasing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Paraphrasing...
+            </>
+          ) : (
+            <>
+              <Wand2 className="mr-2 h-4 w-4" /> Paraphrase
+            </>
           )}
-        </CardFooter>
-      )}
+        </Button>
+      </CardFooter>
     </Card>
   );
 };

@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSemanticSearch, SemanticSearchResult } from "@/hooks/use-semantic-search";
 import { useSavedReports } from "@/hooks/use-saved-reports";
+import WritingStyleAnalyzer from "@/components/plagiarism/WritingStyleAnalyzer";
+import WritingImprovementDashboard from "@/components/plagiarism/WritingImprovementDashboard";
 
 interface Source {
   url: string;
@@ -443,18 +445,25 @@ const Index = () => {
             </TabsContent>
           </Tabs>
         ) : (
-          <ResultsDisplayExtended
-            originalText={originalText}
-            similarityScore={similarityScore}
-            sources={sources}
-            highlightedText={highlightedText}
-            isSearchingSources={isSearchingSources || isSemanticSearching}
-            semanticResults={semanticResults}
-            onReset={handleReset}
-            onSave={handleSaveReport}
-            isSaving={isSaving}
-            contentStats={contentStats}
-          />
+          <>
+            <ResultsDisplayExtended
+              originalText={originalText}
+              similarityScore={similarityScore}
+              sources={sources}
+              highlightedText={highlightedText}
+              isSearchingSources={isSearchingSources || isSemanticSearching}
+              semanticResults={semanticResults}
+              onReset={handleReset}
+              onSave={handleSaveReport}
+              isSaving={isSaving}
+              contentStats={contentStats}
+            />
+            
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <WritingStyleAnalyzer content={originalText} userId={supabase.auth.getUser().then((user) => user.data.user?.id)} />
+              <WritingImprovementDashboard />
+            </div>
+          </>
         )}
       </div>
     </Layout>
