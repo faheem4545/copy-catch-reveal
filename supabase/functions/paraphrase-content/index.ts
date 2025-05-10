@@ -1,6 +1,5 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@3.3.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +22,7 @@ serve(async (req) => {
       );
     }
 
-    // Initialize OpenAI client
+    // Initialize OpenAI API
     const openAiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAiKey) {
       return new Response(
@@ -31,9 +30,6 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
-
-    const configuration = new Configuration({ apiKey: openAiKey });
-    const openai = new OpenAIApi(configuration);
 
     // Adjust instructions based on severity
     let paraphraseInstructions = "";
@@ -57,42 +53,82 @@ serve(async (req) => {
       ? `Context: ${context}\n\nOriginal text: "${text}"\n\n${paraphraseInstructions}`
       : `Original text: "${text}"\n\n${paraphraseInstructions}`;
 
-    const response = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are an academic paraphrasing assistant. Your job is to help users avoid plagiarism by rewriting text while preserving the original meaning. Provide well-structured, natural sounding alternatives that effectively communicate the same information."
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
+    // Fix: Use fetch directly instead of the OpenAI client library which is causing issues
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are an academic paraphrasing assistant. Your job is to help users avoid plagiarism by rewriting text while preserving the original meaning. Provide well-structured, natural sounding alternatives that effectively communicate the same information."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000,
+      })
     });
 
-    const paraphrasedText = response.data.choices[0].message?.content || "";
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("OpenAI API error:", errorData);
+      return new Response(
+        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    const responseData = await response.json();
+    const paraphrasedText = responseData.choices[0].message?.content || "";
 
     // Also generate a short explanation of changes made
-    const explanationResponse = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a helpful writing assistant. Briefly explain the changes made during paraphrasing in 1-2 short sentences."
-        },
-        {
-          role: "user",
-          content: `Original: "${text}"\nParaphrased: "${paraphrasedText}"\n\nExplain very briefly what changes were made.`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 100,
+    const explanationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful writing assistant. Briefly explain the changes made during paraphrasing in 1-2 short sentences."
+          },
+          {
+            role: "user",
+            content: `Original: "${text}"\nParaphrased: "${paraphrasedText}"\n\nExplain very briefly what changes were made.`
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 100,
+      })
     });
 
-    const explanation = explanationResponse.data.choices[0].message?.content || "";
+    if (!explanationResponse.ok) {
+      console.error("Error generating explanation");
+      const explanation = "Text was paraphrased to reduce similarity while maintaining original meaning.";
+      
+      return new Response(
+        JSON.stringify({ 
+          original: text,
+          paraphrased: paraphrasedText, 
+          explanation: explanation
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const explanationData = await explanationResponse.json();
+    const explanation = explanationData.choices[0].message?.content || "Text was paraphrased while maintaining original meaning.";
 
     return new Response(
       JSON.stringify({ 

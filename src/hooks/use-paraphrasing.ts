@@ -45,6 +45,13 @@ export function useParaphrasing() {
         return null;
       }
 
+      if (!data || !data.paraphrased) {
+        console.error('Invalid response from paraphrase function:', data);
+        setError(new Error('Invalid response from paraphrase function'));
+        toast.error("Received invalid response. Please try again.");
+        return null;
+      }
+
       setResult(data);
       return data;
     } catch (err) {

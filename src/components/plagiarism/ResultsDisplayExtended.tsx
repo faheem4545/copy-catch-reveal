@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -269,7 +268,7 @@ const ResultsDisplayExtended: React.FC<ResultsDisplayExtendedProps> = ({
                                 size="sm"
                                 variant="outline"
                                 className="text-xs"
-                                onClick={() => handleParaphraser(source.matchedText)}
+                                onClick={() => handleOpenParaphraser(source.matchedText)}
                               >
                                 <Wand2 className="h-3 w-3 mr-1" />
                                 Paraphrase
