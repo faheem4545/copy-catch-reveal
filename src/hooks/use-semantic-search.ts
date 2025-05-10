@@ -14,6 +14,7 @@ export interface SemanticMatchResult {
 export interface SemanticSearchResult {
   paragraph: string;
   matches: SemanticMatchResult[];
+  error?: string;
 }
 
 interface SourceInfo {
@@ -22,6 +23,12 @@ interface SourceInfo {
   author?: string;
   date?: string;
   publisher?: string;
+}
+
+interface SearchOptions {
+  minParagraphLength?: number;
+  maxParagraphs?: number;
+  excludeCommonPhrases?: boolean;
 }
 
 export function useSemanticSearch() {
@@ -37,7 +44,11 @@ export function useSemanticSearch() {
     highestMatchRate: 0
   });
 
-  const searchSimilarContent = async (text: string, threshold = 0.8, options = { minParagraphLength: 30, maxParagraphs: 20 }): Promise<SemanticSearchResult[]> => {
+  const searchSimilarContent = async (
+    text: string, 
+    threshold = 0.8, 
+    options: SearchOptions = { minParagraphLength: 30, maxParagraphs: 20 }
+  ): Promise<SemanticSearchResult[]> => {
     if (!text || text.trim() === '') {
       return [];
     }
@@ -49,15 +60,16 @@ export function useSemanticSearch() {
       // Split text into paragraphs with improved filtering
       const paragraphs = text
         .split(/\n\n+/)
-        .filter(p => p.trim().length > options.minParagraphLength)
-        .slice(0, options.maxParagraphs); // Limit to max paragraphs
+        .filter(p => p.trim().length > (options.minParagraphLength || 30))
+        .slice(0, options.maxParagraphs || 20); // Limit to max paragraphs
 
       const { data, error } = await supabase.functions.invoke('semantic-plagiarism-check', {
         body: { 
           text,
           chunks: paragraphs,
           threshold,
-          action: "search" // Explicitly set the action to search
+          action: "search", // Explicitly set the action to search
+          searchOptions: options
         }
       });
 
@@ -177,7 +189,7 @@ export function useSemanticSearch() {
     });
   };
 
-  // New function to generate summary statistics
+  // Generate summary statistics
   const generateContentStatistics = (text: string): {
     wordCount: number;
     sentenceCount: number;

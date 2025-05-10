@@ -28,5 +28,6 @@ additional_redirect_urls = ["https://localhost:3000"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 
-[functions.semantic-search]
+[functions.semantic-plagiarism-check]
 verify_jwt = true
+

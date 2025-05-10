@@ -67,7 +67,7 @@ serve(async (req) => {
     ];
 
     // Improved text chunking that filters common phrases if enabled
-    const getTextChunks = (text: string) => {
+    const getTextChunks = (text) => {
       // Split by paragraphs first
       const paragraphs = text.split(/\n\n+/);
       
@@ -151,6 +151,11 @@ serve(async (req) => {
           }
         } catch (err) {
           console.error(`Error processing paragraph for search: ${err.message}`);
+          results.push({
+            paragraph,
+            matches: [],
+            error: err.message
+          });
         }
       }
 

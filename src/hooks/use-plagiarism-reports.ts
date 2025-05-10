@@ -72,7 +72,9 @@ export const usePlagiarismReports = () => {
       word_count: report.content.split(/\s+/).filter(Boolean).length,
       status: "completed",
       // Convert to a plain object array for Supabase
-      citation_suggestions: report.citation_suggestions ? JSON.parse(JSON.stringify(report.citation_suggestions)) : undefined
+      citation_suggestions: report.citation_suggestions 
+        ? JSON.parse(JSON.stringify(report.citation_suggestions))
+        : undefined
     };
 
     const { data, error } = await supabase
