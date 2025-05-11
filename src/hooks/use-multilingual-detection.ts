@@ -15,7 +15,7 @@ export interface MultilingualSearchResult {
   }[];
 }
 
-interface DetectionStats {
+export interface DetectionStats {
   languageDetected: string;
   confidence: number;
   totalMatches: number;

@@ -9,7 +9,7 @@ import { Loader2, Globe, AlertCircle } from "lucide-react";
 
 interface MultilingualDetectionProps {
   content: string;
-  onResultsReceived?: (results: any) => void;
+  onContentProcessed?: (content: string, language: string) => Promise<void>;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -27,10 +27,10 @@ const SUPPORTED_LANGUAGES = [
 
 const MultilingualDetection: React.FC<MultilingualDetectionProps> = ({ 
   content,
-  onResultsReceived 
+  onContentProcessed 
 }) => {
   const [selectedLanguage, setSelectedLanguage] = useState<string>("en");
-  const { detectPlagiarism, isLoading, results } = useMultilingualDetection();
+  const { detectPlagiarism, isDetecting, results, stats } = useMultilingualDetection();
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null);
 
   const handleDetect = async () => {
@@ -38,11 +38,11 @@ const MultilingualDetection: React.FC<MultilingualDetectionProps> = ({
     
     const detectionResults = await detectPlagiarism(content, selectedLanguage);
     
-    if (detectionResults) {
-      setDetectedLanguage(detectionResults.detectedLanguage);
+    if (detectionResults.length > 0 && stats) {
+      setDetectedLanguage(stats.languageDetected);
       
-      if (onResultsReceived) {
-        onResultsReceived(detectionResults);
+      if (onContentProcessed) {
+        onContentProcessed(content, selectedLanguage);
       }
     }
   };
@@ -70,7 +70,7 @@ const MultilingualDetection: React.FC<MultilingualDetectionProps> = ({
             <Select
               value={selectedLanguage}
               onValueChange={(value) => setSelectedLanguage(value)}
-              disabled={isLoading}
+              disabled={isDetecting}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select language" />
@@ -105,19 +105,19 @@ const MultilingualDetection: React.FC<MultilingualDetectionProps> = ({
             </div>
           )}
           
-          {results && (
+          {stats && (
             <div className="p-3 bg-gray-50 rounded-md space-y-2">
               <p className="text-sm font-medium">Results</p>
               <div className="space-y-1">
                 <div className="flex justify-between">
                   <span className="text-sm">Similarity Score:</span>
-                  <Badge variant={results.similarityScore > 30 ? "destructive" : "secondary"}>
-                    {results.similarityScore.toFixed(2)}%
+                  <Badge variant={stats.averageSimilarity > 0.3 ? "destructive" : "secondary"}>
+                    {(stats.averageSimilarity * 100).toFixed(2)}%
                   </Badge>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm">Sources Checked:</span>
-                  <span className="text-sm font-medium">{results.sourcesChecked}</span>
+                  <span className="text-sm font-medium">{stats.totalMatches}</span>
                 </div>
               </div>
             </div>
@@ -127,10 +127,10 @@ const MultilingualDetection: React.FC<MultilingualDetectionProps> = ({
       <CardFooter>
         <Button 
           onClick={handleDetect}
-          disabled={!content || isLoading}
+          disabled={!content || isDetecting}
           className="w-full"
         >
-          {isLoading ? (
+          {isDetecting ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Analyzing...

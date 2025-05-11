@@ -7,6 +7,9 @@ interface WritingStyleResult {
   consistencyScore: number;
   sentenceVariety: number;
   vocabularyRichness: number;
+  passiveVoicePercentage: number;
+  fleschReadingEase: number;
+  sentimentScore: number;
   patterns: string[];
   matchesUserStyle?: boolean;
 }
@@ -48,8 +51,20 @@ export function useWritingAnalysis() {
         }
 
         if (data && data.consistencyScore !== undefined) {
-          setAnalysisResult(data);
-          return data;
+          // Ensure all required properties exist with defaults
+          const processedResult: WritingStyleResult = {
+            consistencyScore: data.consistencyScore || 0,
+            sentenceVariety: data.sentenceVariety || 0,
+            vocabularyRichness: data.vocabularyRichness || 0,
+            passiveVoicePercentage: data.passiveVoicePercentage || 0,
+            fleschReadingEase: data.fleschReadingEase || 70, // Default readable score
+            sentimentScore: data.sentimentScore || 50, // Neutral sentiment default
+            patterns: data.patterns || [],
+            matchesUserStyle: data.matchesUserStyle
+          };
+          
+          setAnalysisResult(processedResult);
+          return processedResult;
         }
       } catch (edgeFunctionError) {
         console.warn("Edge function failed, using fallback:", edgeFunctionError);
@@ -57,7 +72,6 @@ export function useWritingAnalysis() {
       }
 
       // Fallback: Basic local analysis
-      // This is a simplified version that would normally be done by the edge function
       const sentenceCount = text.split(/[.!?]+/).filter(s => s.trim().length > 0).length;
       const words = text.toLowerCase().match(/\b\w+\b/g) || [];
       const uniqueWords = new Set(words).size;
@@ -68,6 +82,26 @@ export function useWritingAnalysis() {
         (s.match(/\b\w+\b/g) || []).length > 20
       ).length;
       const sentenceVariety = Math.max(0, Math.min(100, 100 - Math.abs(avgSentenceLength - 15) * 3 - (longSentences / sentenceCount * 30)));
+      
+      // Calculate the percentage of passive voice
+      const passiveRegex = /\b(?:is|are|am|was|were|be|been|being)\s+\w+ed\b/gi;
+      const passiveMatches = text.match(passiveRegex) || [];
+      const passiveVoicePercentage = Math.round((passiveMatches.length / sentenceCount) * 100);
+      
+      // Calculate Flesch Reading Ease (simplified)
+      const syllables = words.length * 1.5; // Rough approximation
+      const fleschReadingEase = Math.max(0, Math.min(100, 206.835 - 1.015 * (words.length / sentenceCount) - 84.6 * (syllables / words.length)));
+      
+      // Calculate sentiment score (simplified)
+      const positiveWords = ['good', 'great', 'excellent', 'best', 'happy', 'positive', 'nice', 'wonderful', 'fantastic'];
+      const negativeWords = ['bad', 'worst', 'terrible', 'horrible', 'sad', 'negative', 'awful', 'poor', 'disappointing'];
+      
+      const positiveCount = words.filter(word => positiveWords.includes(word)).length;
+      const negativeCount = words.filter(word => negativeWords.includes(word)).length;
+      
+      const sentimentScore = words.length > 0 
+        ? Math.round(50 + ((positiveCount - negativeCount) / words.length) * 100)
+        : 50;
       
       // Identify common patterns (simplified)
       const patterns: string[] = [];
@@ -88,6 +122,9 @@ export function useWritingAnalysis() {
         consistencyScore,
         sentenceVariety,
         vocabularyRichness,
+        passiveVoicePercentage,
+        fleschReadingEase,
+        sentimentScore,
         patterns: patterns.length > 0 ? patterns : ["No distinctive patterns detected"],
         matchesUserStyle: userId ? Math.random() > 0.3 : undefined // Mock user match (would be real with userId)
       };

@@ -13,7 +13,7 @@ interface WritingStyleAnalyzerProps {
 }
 
 const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, userId }) => {
-  const { analyzeWritingStyle, isAnalyzing, analysisResults } = useWritingAnalysis();
+  const { analyzeWritingStyle, isAnalyzing, analysisResult } = useWritingAnalysis();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
@@ -23,10 +23,10 @@ const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, us
     }
   }, [content, analyzeWritingStyle, userId, isInitialLoad]);
 
-  const data = analysisResults ? [
-    { name: 'Passive Voice', value: analysisResults.passiveVoicePercentage },
-    { name: 'Flesch Reading Ease', value: analysisResults.fleschReadingEase },
-    { name: 'Sentiment Score', value: analysisResults.sentimentScore },
+  const data = analysisResult ? [
+    { name: 'Passive Voice', value: analysisResult.passiveVoicePercentage || 0 },
+    { name: 'Flesch Reading Ease', value: analysisResult.fleschReadingEase || 0 },
+    { name: 'Sentiment Score', value: analysisResult.sentimentScore || 0 },
   ] : [];
 
   const formatValue = (value: number, name: string) => {
@@ -53,17 +53,17 @@ const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, us
             <Loader2 className="mr-2 h-6 w-6 animate-spin" />
             Analyzing...
           </div>
-        ) : analysisResults ? (
+        ) : analysisResult ? (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Badge variant="secondary">
-                Passive Voice: {analysisResults.passiveVoicePercentage.toFixed(2)}%
+                Passive Voice: {(analysisResult.passiveVoicePercentage || 0).toFixed(2)}%
               </Badge>
               <Badge variant="secondary">
-                Flesch Reading Ease: {analysisResults.fleschReadingEase.toFixed(2)}
+                Flesch Reading Ease: {(analysisResult.fleschReadingEase || 0).toFixed(2)}
               </Badge>
               <Badge variant="secondary">
-                Sentiment Score: {analysisResults.sentimentScore.toFixed(2)}
+                Sentiment Score: {(analysisResult.sentimentScore || 0).toFixed(2)}
               </Badge>
             </div>
 
