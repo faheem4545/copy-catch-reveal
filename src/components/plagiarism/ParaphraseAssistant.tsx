@@ -10,17 +10,23 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 type SeverityLevel = "low" | "medium" | "high";
 
 interface ParaphraseAssistantProps {
+  initialText?: string;
   textToParaphrase?: string;
   originalContext?: string;
   onParaphrased?: (original: string, paraphrased: string) => void;
+  onClose?: () => void;
+  onSelect?: (text: string) => void;
 }
 
 const ParaphraseAssistant: React.FC<ParaphraseAssistantProps> = ({
+  initialText = "",
   textToParaphrase = "",
   originalContext = "",
-  onParaphrased
+  onParaphrased,
+  onClose,
+  onSelect
 }) => {
-  const [text, setText] = useState(textToParaphrase);
+  const [text, setText] = useState(initialText || textToParaphrase);
   const [context, setContext] = useState(originalContext);
   const [severity, setSeverity] = useState<SeverityLevel>("medium");
   const { paraphraseText, isParaphrasing, paraphraseResult, paraphraseError, clearResult } = useParaphrasing();
@@ -42,6 +48,15 @@ const ParaphraseAssistant: React.FC<ParaphraseAssistantProps> = ({
     setText("");
     setContext("");
     clearResult();
+  };
+  
+  const handleSelectParaphrased = () => {
+    if (paraphraseResult && onSelect) {
+      onSelect(paraphraseResult.paraphrased);
+    }
+    if (onClose) {
+      onClose();
+    }
   };
 
   // Check if the error is related to quota or rate limiting
@@ -135,9 +150,16 @@ const ParaphraseAssistant: React.FC<ParaphraseAssistantProps> = ({
       </CardContent>
       
       <CardFooter className="flex justify-between">
-        <Button variant="ghost" onClick={handleReset} disabled={isParaphrasing}>
-          <RotateCcw className="mr-2 h-4 w-4" /> Reset
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={handleReset} disabled={isParaphrasing}>
+            <RotateCcw className="mr-2 h-4 w-4" /> Reset
+          </Button>
+          {paraphraseResult && onSelect && (
+            <Button variant="outline" onClick={handleSelectParaphrased}>
+              Use This Version
+            </Button>
+          )}
+        </div>
         <Button onClick={handleParaphrase} disabled={!text.trim() || isParaphrasing}>
           {isParaphrasing ? (
             <>

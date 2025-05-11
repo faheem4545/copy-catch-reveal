@@ -31,6 +31,7 @@ const Index = () => {
   const [similarityScore, setSimilarityScore] = useState(0);
   const [highlightedText, setHighlightedText] = useState<React.ReactNode>(null);
   const cseId = "a52863c5312114c0a";
+  const [userId, setUserId] = useState<string>("");
 
   const { searchSimilarContent, analyzeSourceReliability, generateContentStatistics, isSearching: isSemanticSearching } = useSemanticSearch();
   const { saveCurrentReport, isSaving } = useSavedReports();
@@ -41,6 +42,16 @@ const Index = () => {
     avgSentenceLength: 0,
     complexityScore: 0
   });
+
+  // Get user ID on component mount
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data.user?.id || "");
+    };
+    
+    fetchUserId();
+  }, []);
 
   const findRealSources = async (text: string) => {
     try {
@@ -460,7 +471,7 @@ const Index = () => {
             />
             
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <WritingStyleAnalyzer content={originalText} userId={supabase.auth.getUser().then((user) => user.data.user?.id)} />
+              <WritingStyleAnalyzer content={originalText} userId={userId} />
               <WritingImprovementDashboard />
             </div>
           </>
