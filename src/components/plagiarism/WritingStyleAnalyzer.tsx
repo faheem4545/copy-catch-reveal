@@ -74,7 +74,11 @@ const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, us
                 <YAxis />
                 <Tooltip formatter={(value, name) => [formatValue(Number(value), String(name)), name]} />
                 <Bar dataKey="value" fill="#8884d8">
-                  <LabelList dataKey="value" position="top" formatter={(value) => formatValue(Number(value), String(data.find(item => item.value === value)?.name || ''))} />
+                  <LabelList dataKey="value" position="top" formatter={(value) => {
+                    const val = Number(value);
+                    const item = data.find(item => item.value === val);
+                    return formatValue(val, item ? item.name : '');
+                  }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

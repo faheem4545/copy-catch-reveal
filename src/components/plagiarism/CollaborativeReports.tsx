@@ -1,24 +1,12 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useToast } from "@/hooks/use-toast";
 import { Users, MessagesSquare, Share2, UserPlus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/context/AuthContext";
-
-interface Comment {
-  id: string;
-  user_id: string;
-  report_id: string;
-  comment: string;
-  created_at: string;
-  user_name?: string;
-  user_avatar?: string;
-}
+import { useCollaborativeReports } from "@/hooks/use-collaborative-reports";
 
 interface CollaborativeReportsProps {
   reportId?: string;
@@ -29,198 +17,26 @@ const CollaborativeReports: React.FC<CollaborativeReportsProps> = ({
   reportId, 
   reportTitle = "Untitled Report"
 }) => {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [newComment, setNewComment] = useState("");
-  const [collaborators, setCollaborators] = useState<{id: string, name: string, avatar?: string}[]>([]);
   const [shareEmail, setShareEmail] = useState("");
-  const [isSharing, setIsSharing] = useState(false);
-  
-  // Fetch comments for the current report
-  useEffect(() => {
-    if (!reportId) return;
-    
-    const fetchComments = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from('report_comments')
-          .select(`
-            id, 
-            user_id, 
-            report_id, 
-            comment, 
-            created_at,
-            profiles:user_id (name)
-          `)
-          .eq('report_id', reportId)
-          .order('created_at', { ascending: true });
-        
-        if (error) throw error;
-        
-        // Transform the data to include user information
-        const commentsWithUserInfo = data.map((comment: any) => ({
-          ...comment,
-          user_name: comment.profiles?.name || 'Unknown User',
-        }));
-        
-        setComments(commentsWithUserInfo);
-      } catch (error) {
-        console.error('Error fetching comments:', error);
-        toast({
-          title: "Failed to load comments",
-          description: "There was a problem loading the comments.",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
-    fetchComments();
-    
-    // Set up realtime subscription for new comments
-    const commentsSubscription = supabase
-      .channel('report_comments_changes')
-      .on('postgres_changes', { 
-        event: 'INSERT', 
-        schema: 'public', 
-        table: 'report_comments',
-        filter: `report_id=eq.${reportId}`
-      }, payload => {
-        // Fetch the user info for the new comment
-        supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', payload.new.user_id)
-          .single()
-          .then(({ data }) => {
-            const newComment = {
-              ...payload.new,
-              user_name: data?.name || 'Unknown User'
-            };
-            setComments(prev => [...prev, newComment]);
-          });
-      })
-      .subscribe();
-    
-    // Fetch collaborators
-    if (reportId) {
-      supabase
-        .from('report_collaborators')
-        .select(`
-          user_id,
-          profiles:user_id (id, name)
-        `)
-        .eq('report_id', reportId)
-        .then(({ data, error }) => {
-          if (error) {
-            console.error('Error fetching collaborators:', error);
-            return;
-          }
-          
-          if (data) {
-            const collaboratorsData = data.map(item => ({
-              id: item.profiles.id,
-              name: item.profiles.name,
-            }));
-            setCollaborators(collaboratorsData);
-          }
-        });
-    }
-    
-    return () => {
-      supabase.removeChannel(commentsSubscription);
-    };
-  }, [reportId, toast]);
+  const { 
+    comments,
+    collaborators,
+    isLoading,
+    isSharing,
+    addComment,
+    shareReport
+  } = useCollaborativeReports(reportId);
   
   const handleAddComment = async () => {
-    if (!newComment.trim() || !reportId || !user) {
-      return;
-    }
-    
-    try {
-      const { error } = await supabase
-        .from('report_comments')
-        .insert({
-          report_id: reportId,
-          user_id: user.id,
-          comment: newComment.trim()
-        });
-      
-      if (error) throw error;
-      
+    if (await addComment(newComment)) {
       setNewComment("");
-      
-      // The comment will be added via the subscription
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      toast({
-        title: "Failed to add comment",
-        description: "There was a problem adding your comment.",
-        variant: "destructive"
-      });
     }
   };
   
   const handleShareReport = async () => {
-    if (!reportId || !shareEmail.trim() || !user) {
-      return;
-    }
-    
-    setIsSharing(true);
-    
-    try {
-      // First check if user exists with this email
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .eq('email', shareEmail.trim())
-        .single();
-      
-      if (userError) {
-        toast({
-          title: "User not found",
-          description: "No user found with this email address.",
-          variant: "destructive"
-        });
-        return;
-      }
-      
-      // Add collaborator
-      const { error } = await supabase
-        .from('report_collaborators')
-        .insert({
-          report_id: reportId,
-          user_id: userData.id,
-          added_by: user.id
-        });
-      
-      if (error) throw error;
-      
-      // Update collaborators list
-      setCollaborators(prev => [...prev, {
-        id: userData.id,
-        name: userData.name
-      }]);
-      
+    if (await shareReport(shareEmail)) {
       setShareEmail("");
-      
-      toast({
-        title: "Report shared",
-        description: `The report has been shared with ${shareEmail}`,
-      });
-    } catch (error) {
-      console.error('Error sharing report:', error);
-      toast({
-        title: "Failed to share report",
-        description: "There was a problem sharing the report.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSharing(false);
     }
   };
   

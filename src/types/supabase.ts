@@ -16,18 +16,21 @@ export interface Database {
           created_at: string | null
           name: string | null
           updated_at: string | null
+          email: string | null
         }
         Insert: {
           id: string
           created_at?: string | null
           name?: string | null
           updated_at?: string | null
+          email?: string | null
         }
         Update: {
           id?: string
           created_at?: string | null
           name?: string | null
           updated_at?: string | null
+          email?: string | null
         }
         Relationships: []
       }
@@ -71,6 +74,76 @@ export interface Database {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      report_comments: {
+        Row: {
+          id: string
+          report_id: string
+          user_id: string
+          comment: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          user_id: string
+          comment: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          user_id?: string
+          comment?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_comments_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "plagiarism_reports"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      report_collaborators: {
+        Row: {
+          id: string
+          report_id: string
+          user_id: string
+          added_by: string
+          permission: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          report_id: string
+          user_id: string
+          added_by: string
+          permission?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          report_id?: string
+          user_id?: string
+          added_by?: string
+          permission?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_collaborators_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "plagiarism_reports"
             referencedColumns: ["id"]
           }
         ]
