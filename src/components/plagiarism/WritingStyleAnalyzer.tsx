@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,15 +13,15 @@ interface WritingStyleAnalyzerProps {
 }
 
 const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, userId }) => {
-  const { analyzeStyle, isAnalyzing, analysisResults } = useWritingAnalysis();
+  const { analyzeWritingStyle, isAnalyzing, analysisResults } = useWritingAnalysis();
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
     if (content && isInitialLoad) {
-      analyzeStyle(content, userId);
+      analyzeWritingStyle(content, userId);
       setIsInitialLoad(false);
     }
-  }, [content, analyzeStyle, userId, isInitialLoad]);
+  }, [content, analyzeWritingStyle, userId, isInitialLoad]);
 
   const data = analysisResults ? [
     { name: 'Passive Voice', value: analysisResults.passiveVoicePercentage },
@@ -71,9 +72,9 @@ const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, us
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
-                <Tooltip formatter={(value, name) => [formatValue(value, name), name]} />
+                <Tooltip formatter={(value, name) => [formatValue(Number(value), String(name)), name]} />
                 <Bar dataKey="value" fill="#8884d8">
-                  <LabelList dataKey="value" position="top" formatter={(value, name) => formatValue(value, name)} />
+                  <LabelList dataKey="value" position="top" formatter={(value) => formatValue(Number(value), String(data.find(item => item.value === value)?.name || ''))} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -87,7 +88,7 @@ const WritingStyleAnalyzer: React.FC<WritingStyleAnalyzerProps> = ({ content, us
       <CardFooter>
         <Button
           variant="outline"
-          onClick={() => analyzeStyle(content, userId)}
+          onClick={() => analyzeWritingStyle(content, userId)}
           disabled={isAnalyzing}
         >
           <BarChart3 className="mr-2 h-4 w-4" />

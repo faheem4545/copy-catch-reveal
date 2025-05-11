@@ -9,3 +9,6 @@ export { default as WritingStyleAnalyzer } from './WritingStyleAnalyzer';
 export { default as WritingImprovementDashboard } from './WritingImprovementDashboard';
 export { default as ResultsDisplayExtended } from './ResultsDisplayExtended';
 export { default as PlagiarismClassifier } from './PlagiarismClassifier';
+export { default as BatchFileUpload } from './BatchFileUpload';
+export { default as CollaborativeReports } from './CollaborativeReports';
+export { default as MultilingualDetection } from './MultilingualDetection';
