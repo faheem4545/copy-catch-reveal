@@ -1,60 +1,49 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-}
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function getInitialSession() {
+    // Check for active session
+    const getUser = async () => {
       try {
-        setLoading(true);
-        
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        const { data: { subscription } } = await supabase.auth.onAuthStateChange(
-          (_event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            setLoading(false);
-          }
-        );
-
-        setLoading(false);
-        
-        return () => {
-          subscription.unsubscribe();
-        };
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user);
       } catch (error) {
-        console.error('Error getting session:', error);
+        console.error('Error getting user:', error);
+        setUser(null);
+      } finally {
         setLoading(false);
       }
-    }
+    };
 
-    const unsubscribe = getInitialSession();
+    getUser();
 
+    // Set up auth listener
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    // Clean up subscription on unmount
     return () => {
-      if (typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, session, loading }}>
+    <AuthContext.Provider value={{ user, loading }}>
       {children}
     </AuthContext.Provider>
   );

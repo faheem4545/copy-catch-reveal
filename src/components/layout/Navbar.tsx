@@ -63,9 +63,9 @@ const Navbar: React.FC = () => {
                   <AvatarImage src={user.user_metadata?.avatar_url} />
                   <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
-                <div className="hidden md:block text-sm">
+                <Link to="/account" className="hidden md:block text-sm hover:underline">
                   {user.email}
-                </div>
+                </Link>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   Sign Out
                 </Button>
@@ -115,9 +115,9 @@ const Navbar: React.FC = () => {
                     <AvatarImage src={user.user_metadata?.avatar_url} />
                     <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div className="ml-2 text-sm">
+                  <Link to="/account" className="ml-2 text-sm hover:underline" onClick={() => setIsMobileMenuOpen(false)}>
                     {user.email}
-                  </div>
+                  </Link>
                 </div>
                 <Button 
                   variant="outline" 
