@@ -11,11 +11,13 @@ import JSZip from "jszip";
 interface BatchFileUploadProps {
   onBatchProcessingComplete?: (results: any[]) => void;
   userId?: string;
+  onFilesProcessed?: (files: { name: string; content: string }[]) => void;
 }
 
 const BatchFileUpload: React.FC<BatchFileUploadProps> = ({ 
   onBatchProcessingComplete,
-  userId 
+  userId,
+  onFilesProcessed 
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -101,6 +103,11 @@ const BatchFileUpload: React.FC<BatchFileUploadProps> = ({
       
       // Process the batch
       const results = await processBatch(fileContents, userId);
+
+      // Pass the file contents to parent component if onFilesProcessed is provided
+      if (onFilesProcessed) {
+        onFilesProcessed(fileContents);
+      }
       
       if (results.length > 0) {
         if (onBatchProcessingComplete) {
