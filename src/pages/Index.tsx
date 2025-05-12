@@ -16,6 +16,9 @@ import { useMultilingualDetection } from "@/hooks/use-multilingual-detection";
 import WritingStyleAnalyzer from "@/components/plagiarism/WritingStyleAnalyzer";
 import WritingImprovementDashboard from "@/components/plagiarism/WritingImprovementDashboard";
 import CollaborativeReports from "@/components/plagiarism/CollaborativeReports";
+import EnhancedParaphraseAssistant from "@/components/plagiarism/EnhancedParaphraseAssistant";
+import { useAuth } from "@/context/AuthContext";
+import OnboardingTourWrapper from "@/components/OnboardingTourSteps";
 
 interface Source {
   url: string;
@@ -40,7 +43,11 @@ const Index = () => {
   const [reportId, setReportId] = useState<string | undefined>(undefined);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [batchFiles, setBatchFiles] = useState<{name: string, content: string}[]>([]);
+  const [showTour, setShowTour] = useState(false);
+  const [showParaphraseAssistant, setShowParaphraseAssistant] = useState(false);
+  const [textToParaphrase, setTextToParaphrase] = useState("");
 
+  const { user } = useAuth();
   const { searchSimilarContent, analyzeSourceReliability, generateContentStatistics, isSearching: isSemanticSearching } = useSemanticSearch();
   const { saveCurrentReport, isSaving } = useSavedReports();
   const { processBatch, isProcessing: isBatchProcessing } = useBatchProcessing();
@@ -53,15 +60,27 @@ const Index = () => {
     complexityScore: 0
   });
 
+  // Show onboarding tour for new users
+  useEffect(() => {
+    const hasSeenTour = localStorage.getItem('onboardingCompleted');
+    if (!hasSeenTour) {
+      setTimeout(() => setShowTour(true), 1000);
+    }
+  }, []);
+
   // Get user ID on component mount
   useEffect(() => {
     const fetchUserId = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserId(data.user?.id || "");
+      if (user) {
+        setUserId(user.id);
+      } else {
+        const { data } = await supabase.auth.getUser();
+        setUserId(data.user?.id || "");
+      }
     };
     
     fetchUserId();
-  }, []);
+  }, [user]);
 
   const findRealSources = async (text: string) => {
     try {
@@ -371,7 +390,11 @@ const Index = () => {
           return (
             <span 
               key={index} 
-              className={isPlagiarized ? "bg-yellow-200 px-1" : ""}
+              className={isPlagiarized ? "bg-yellow-200 dark:bg-yellow-900 dark:text-white px-1 cursor-pointer" : ""}
+              onClick={isPlagiarized ? () => {
+                setTextToParaphrase(sentence);
+                setShowParaphraseAssistant(true);
+              } : undefined}
             >
               {sentence}{' '}
             </span>
@@ -465,6 +488,7 @@ const Index = () => {
     setSimilarityScore(0);
     setHighlightedText(null);
     setSemanticResults([]);
+    setShowParaphraseAssistant(false);
     setContentStats({
       wordCount: 0,
       sentenceCount: 0,
@@ -515,6 +539,12 @@ const Index = () => {
     }
   };
 
+  const handleParaphrased = (original: string, paraphrased: string) => {
+    setShowParaphraseAssistant(false);
+    // Here we could replace the original text with the paraphrased version
+    toast.success("Text successfully paraphrased. Click 'Use This Version' to apply changes.");
+  };
+
   useEffect(() => {
     if (originalText && sources) {
       const highlighted = generateHighlightedText(originalText, sources);
@@ -524,6 +554,12 @@ const Index = () => {
 
   return (
     <Layout>
+      <OnboardingTourWrapper 
+        isVisible={showTour} 
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+      />
+      
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-10">
           <div className="flex justify-center mb-4">
@@ -532,7 +568,7 @@ const Index = () => {
           <h1 className="text-4xl font-bold mb-3 gradient-text">
             Plagiarism Detection Tool
           </h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
             Check your text for plagiarism with our advanced NLP detection technology
           </p>
         </div>
@@ -542,11 +578,11 @@ const Index = () => {
             <TabsList className="grid w-full grid-cols-4 mb-6">
               <TabsTrigger value="text">Paste Text</TabsTrigger>
               <TabsTrigger value="upload">Upload Document</TabsTrigger>
-              <TabsTrigger value="batch">
+              <TabsTrigger value="batch" className="batch-upload-tab">
                 <FolderArchive className="mr-2 h-4 w-4" />
                 Batch Processing
               </TabsTrigger>
-              <TabsTrigger value="multilingual">
+              <TabsTrigger value="multilingual" className="multilingual-tab">
                 <Languages className="mr-2 h-4 w-4" />
                 Multilingual
               </TabsTrigger>
@@ -569,30 +605,49 @@ const Index = () => {
           </Tabs>
         ) : (
           <>
-            <ResultsDisplayExtended
-              originalText={originalText}
-              similarityScore={similarityScore}
-              sources={sources}
-              highlightedText={highlightedText}
-              isSearchingSources={isSearchingSources || isSemanticSearching || isMultilingualDetecting}
-              semanticResults={semanticResults}
-              onReset={handleReset}
-              onSave={handleSaveReport}
-              isSaving={isSaving}
-              contentStats={contentStats}
-            />
+            <div className="results-display">
+              <ResultsDisplayExtended
+                originalText={originalText}
+                similarityScore={similarityScore}
+                sources={sources}
+                highlightedText={highlightedText}
+                isSearchingSources={isSearchingSources || isSemanticSearching || isMultilingualDetecting}
+                semanticResults={semanticResults}
+                onReset={handleReset}
+                onSave={handleSaveReport}
+                isSaving={isSaving}
+                contentStats={contentStats}
+              />
+            </div>
             
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 writing-improvement">
               <WritingStyleAnalyzer content={originalText} userId={userId} />
               <WritingImprovementDashboard />
             </div>
             
-            <div className="mt-8">
+            <div className="mt-8 collaborative-features">
               <CollaborativeReports 
                 reportId={reportId}
                 reportTitle={`Report ${new Date().toLocaleString()}`}
               />
             </div>
+
+            {showParaphraseAssistant && (
+              <div className="fixed inset-0 bg-black/50 dark:bg-black/80 flex items-center justify-center p-4 z-50">
+                <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <EnhancedParaphraseAssistant 
+                    textToParaphrase={textToParaphrase}
+                    onClose={() => setShowParaphraseAssistant(false)}
+                    onParaphrased={handleParaphrased}
+                    onSelect={(text) => {
+                      // Here we would replace the selected text with the paraphrased version
+                      toast.success("Paraphrased text selected! In a real implementation, this would replace the original text.");
+                      setShowParaphraseAssistant(false);
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </>
         )}
         
@@ -601,13 +656,13 @@ const Index = () => {
             <h2 className="text-xl font-bold mb-4">Batch Processing Results</h2>
             <div className="grid gap-4">
               {batchFiles.map((file, index) => (
-                <div key={index} className="bg-gray-50 p-4 rounded-md">
+                <div key={index} className="bg-secondary/20 p-4 rounded-md">
                   <h3 className="font-medium">{file.name}</h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {file.content.split(/\s+/).filter(Boolean).length} words
                   </p>
                   <button 
-                    className="text-sm text-purple-600 mt-2"
+                    className="text-sm text-purple-600 dark:text-purple-400 mt-2"
                     onClick={() => {
                       setOriginalText(file.content);
                       handleTextSubmit(file.content);

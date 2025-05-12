@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { text, context = "", severity = "medium" } = await req.json();
+    const { text, context = "", severity = "medium", style = "formal" } = await req.json();
     
     if (!text || text.trim() === '') {
       return new Response(
@@ -31,22 +31,45 @@ serve(async (req) => {
       );
     }
 
-    // Adjust instructions based on severity
+    // Adjust instructions based on severity and style
     let paraphraseInstructions = "";
     
+    // Base instructions based on severity
+    let severityInstructions = "";
     switch(severity) {
       case "high":
-        paraphraseInstructions = "Completely rewrite this text while preserving the core meaning. Use different vocabulary, sentence structures, and organization.";
+        severityInstructions = "Completely rewrite this text while preserving the core meaning. Use different vocabulary, sentence structures, and organization.";
         break;
       case "medium":
-        paraphraseInstructions = "Rewrite this text to reduce similarity while maintaining the original meaning. Change vocabulary and sentence structure where possible.";
+        severityInstructions = "Rewrite this text to reduce similarity while maintaining the original meaning. Change vocabulary and sentence structure where possible.";
         break;
       case "low":
-        paraphraseInstructions = "Lightly revise this text to make it more original. Keep key terminology intact but adjust phrasing and structure.";
+        severityInstructions = "Lightly revise this text to make it more original. Keep key terminology intact but adjust phrasing and structure.";
         break;
       default:
-        paraphraseInstructions = "Rewrite this text to reduce similarity while maintaining the original meaning.";
+        severityInstructions = "Rewrite this text to reduce similarity while maintaining the original meaning.";
     }
+    
+    // Additional style-specific instructions
+    let styleInstructions = "";
+    switch(style) {
+      case "formal":
+        styleInstructions = "Use formal language, professional tone, and well-structured sentences suitable for business or academic contexts.";
+        break;
+      case "creative":
+        styleInstructions = "Use vivid, engaging language with creative metaphors and expressive vocabulary to make the text more interesting.";
+        break;
+      case "simple":
+        styleInstructions = "Use clear, straightforward language with short sentences and common vocabulary. Aim for high readability.";
+        break;
+      case "academic":
+        styleInstructions = "Use scholarly language, discipline-specific terminology, and complex sentence structures appropriate for academic papers.";
+        break;
+      default:
+        styleInstructions = "Use professional language appropriate for business or academic contexts.";
+    }
+    
+    paraphraseInstructions = `${severityInstructions} ${styleInstructions}`;
 
     // Add context if provided
     const prompt = context 
@@ -103,7 +126,7 @@ serve(async (req) => {
       const paraphrasedText = responseData.choices[0].message?.content || "";
 
       // Since API quota is limited, let's provide a simpler explanation instead of making another API call
-      const explanation = "Text has been paraphrased to reduce similarity while maintaining original meaning.";
+      const explanation = `Text has been paraphrased in ${style} style with ${severity} intensity to reduce similarity while maintaining original meaning.`;
       
       return new Response(
         JSON.stringify({ 

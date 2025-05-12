@@ -1,23 +1,30 @@
 
-import { ReactNode } from "react";
-import Navbar from "./Navbar";
+import React, { useEffect, useState } from 'react';
+import Navbar from './Navbar';
+import { useTheme } from '@/context/ThemeContext';
 
 interface LayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-const Layout = ({ children }: LayoutProps) => {
+const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { theme } = useTheme();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  
+  useEffect(() => {
+    const hasCompletedOnboarding = localStorage.getItem('onboardingCompleted');
+    if (!hasCompletedOnboarding) {
+      // We delay the onboarding a bit to let the page load first
+      setTimeout(() => setShowOnboarding(true), 1000);
+    }
+  }, []);
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className={`min-h-screen bg-background flex flex-col transition-colors ${theme}`}>
       <Navbar />
-      <main className="flex-grow container mx-auto px-4 py-8 max-w-7xl">
+      <main className="flex-1 py-6 px-4 sm:px-6 lg:px-8">
         {children}
       </main>
-      <footer className="bg-white shadow-inner py-6">
-        <div className="container mx-auto px-4 text-center text-gray-500">
-          <p>&copy; {new Date().getFullYear()} PlagiarismCheck. All rights reserved.</p>
-        </div>
-      </footer>
     </div>
   );
 };

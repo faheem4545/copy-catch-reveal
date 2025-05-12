@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type SeverityLevel = "low" | "medium" | "high";
+type ParaphraseStyle = "formal" | "creative" | "simple" | "academic";
 
 interface ParaphraseResult {
   original: string;
@@ -19,7 +20,8 @@ export function useParaphrasing() {
   const paraphraseText = async (
     text: string, 
     context: string = "",
-    severity: SeverityLevel = "medium"
+    severity: SeverityLevel = "medium",
+    style: ParaphraseStyle = "formal"
   ): Promise<ParaphraseResult | null> => {
     if (!text || text.trim() === '') {
       toast.error("Please provide text to paraphrase");
@@ -34,7 +36,8 @@ export function useParaphrasing() {
         body: { 
           text,
           context,
-          severity
+          severity,
+          style
         }
       });
 

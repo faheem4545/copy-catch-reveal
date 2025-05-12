@@ -1,169 +1,139 @@
 
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { FileCheck, LogIn, Menu, User, X } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ThemeSwitcher } from "./ThemeSwitcher";
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import ThemeToggle from '@/components/ui/ThemeToggle';
+import { Button } from '@/components/ui/button';
+import { FileCheck, User, FileText, Book, Settings, Menu, X } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-const Navbar = () => {
-  const { user, signOut } = useAuth();
-  const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate("/login");
-    } catch (error) {
-      console.error("Error signing out:", error);
-    }
+const Navbar: React.FC = () => {
+  const { user } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
   };
-
+  
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
+  
+  const navItems = [
+    { name: 'Home', path: '/', icon: <FileCheck className="h-5 w-5" /> },
+    { name: 'Reports', path: '/reports', icon: <FileText className="h-5 w-5" /> },
+    { name: 'Resources', path: '/resources', icon: <Book className="h-5 w-5" /> },
+    { name: 'Settings', path: '/settings', icon: <Settings className="h-5 w-5" /> },
+  ];
+  
   return (
-    <nav className="bg-white dark:bg-gray-900 shadow-sm border-b border-gray-200 dark:border-gray-800">
+    <nav className="border-b dark:border-gray-800 bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link to="/" className="flex items-center">
-                <FileCheck className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-                <span className="ml-2 text-lg font-bold text-gray-900 dark:text-gray-100">
-                  PlagiarismCheck
-                </span>
+                <FileCheck className="h-8 w-8 text-purple-600" />
+                <span className="text-xl font-bold ml-2 gradient-text">PlagScan</span>
               </Link>
             </div>
+            
             <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-              <Link
-                to="/"
-                className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:border-gray-600 dark:hover:text-gray-200"
-              >
-                Home
-              </Link>
-              <Link
-                to="/dashboard"
-                className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:border-gray-600 dark:hover:text-gray-200"
-              >
-                Dashboard
-              </Link>
-              <Link
-                to="/about"
-                className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent text-sm font-medium text-gray-500 dark:text-gray-400 hover:border-gray-300 hover:text-gray-700 dark:hover:border-gray-600 dark:hover:text-gray-200"
-              >
-                About
-              </Link>
+              {navItems.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className="inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-purple-500 text-sm font-medium"
+                >
+                  {item.icon}
+                  <span className="ml-2">{item.name}</span>
+                </Link>
+              ))}
             </div>
           </div>
-
+          
           <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
-            <ThemeSwitcher />
+            <ThemeToggle />
             
             {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <User className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 z-50 bg-background" align="end">
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem>
-                      Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      My Reports
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}>
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center space-x-3">
+                <Avatar>
+                  <AvatarImage src={user.user_metadata?.avatar_url} />
+                  <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div className="hidden md:block text-sm">
+                  {user.email}
+                </div>
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </div>
             ) : (
-              <Button variant="default" onClick={() => navigate("/login")}>
-                <LogIn className="mr-2 h-4 w-4" />
-                Login
+              <Button asChild>
+                <Link to="/login">
+                  <User className="mr-2 h-4 w-4" />
+                  Sign In
+                </Link>
               </Button>
             )}
           </div>
-
-          <div className="-mr-2 flex items-center sm:hidden">
-            <div className="mr-4">
-              <ThemeSwitcher />
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-              aria-controls="mobile-menu"
-              aria-expanded="false"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-            >
-              <span className="sr-only">Open main menu</span>
-              {isMenuOpen ? (
-                <X className="block h-6 w-6" />
+          
+          <div className="flex items-center sm:hidden">
+            <ThemeToggle />
+            <Button variant="ghost" onClick={toggleMobileMenu}>
+              {isMobileMenuOpen ? (
+                <X className="h-6 w-6" />
               ) : (
-                <Menu className="block h-6 w-6" />
+                <Menu className="h-6 w-6" />
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
-
-      {isMenuOpen && (
-        <div className="sm:hidden" id="mobile-menu">
+      
+      {isMobileMenuOpen && (
+        <div className="sm:hidden animate-fade-in">
           <div className="pt-2 pb-4 space-y-1">
-            <Link
-              to="/"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Home
-            </Link>
-            <Link
-              to="/dashboard"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              Dashboard
-            </Link>
-            <Link
-              to="/about"
-              className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              About
-            </Link>
-            {!user && (
+            {navItems.map((item) => (
               <Link
-                to="/login"
-                className="block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
-                onClick={() => setIsMenuOpen(false)}
+                key={item.name}
+                to={item.path}
+                className="flex items-center px-3 py-2 text-base font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
+                onClick={() => setIsMobileMenuOpen(false)}
               >
-                Login
+                {item.icon}
+                <span className="ml-2">{item.name}</span>
               </Link>
-            )}
-            {user && (
-              <button
-                onClick={() => {
-                  handleSignOut();
-                  setIsMenuOpen(false);
-                }}
-                className="w-full text-left block pl-3 pr-4 py-2 border-l-4 border-transparent text-base font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-700 hover:text-gray-700 dark:hover:text-gray-200"
-              >
-                Log out
-              </button>
+            ))}
+            
+            {user ? (
+              <>
+                <div className="px-3 py-2 border-t dark:border-gray-800 flex items-center">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.user_metadata?.avatar_url} />
+                    <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="ml-2 text-sm">
+                    {user.email}
+                  </div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  className="w-full mx-3 mt-2" 
+                  onClick={handleSignOut}
+                >
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Button className="w-full mx-3 mt-2" asChild>
+                <Link to="/login" onClick={() => setIsMobileMenuOpen(false)}>
+                  <User className="mr-2 h-4 w-4" />
+                  Sign In
+                </Link>
+              </Button>
             )}
           </div>
         </div>
