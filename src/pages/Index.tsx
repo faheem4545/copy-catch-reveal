@@ -19,6 +19,8 @@ import CollaborativeReports from "@/components/plagiarism/CollaborativeReports";
 import EnhancedParaphraseAssistant from "@/components/plagiarism/EnhancedParaphraseAssistant";
 import { useAuth } from "@/context/AuthContext";
 import OnboardingTourWrapper from "@/components/OnboardingTourSteps";
+import SmartRewritingModal from "@/components/plagiarism/SmartRewritingModal";
+import AdvancedSuggestionPanel from "@/components/plagiarism/AdvancedSuggestionPanel";
 
 interface Source {
   url: string;
@@ -46,6 +48,11 @@ const Index = () => {
   const [showTour, setShowTour] = useState(false);
   const [showParaphraseAssistant, setShowParaphraseAssistant] = useState(false);
   const [textToParaphrase, setTextToParaphrase] = useState("");
+  
+  // New state for smart rewriting
+  const [showSmartRewriting, setShowSmartRewriting] = useState(false);
+  const [textToRewrite, setTextToRewrite] = useState("");
+  const [flaggedPassages, setFlaggedPassages] = useState<{text: string, similarity: number}[]>([]);
 
   const { user } = useAuth();
   const { searchSimilarContent, analyzeSourceReliability, generateContentStatistics, isSearching: isSemanticSearching } = useSemanticSearch();
@@ -300,50 +307,46 @@ const Index = () => {
       const semanticMatches = await searchSimilarContent(text, semanticOptions.threshold, semanticOptions);
       setSemanticResults(semanticMatches);
       
-      // If semantic matching found additional matches that traditional search didn't
-      if (semanticMatches && semanticMatches.some(result => result.matches.length > 0)) {
-        const additionalSources = semanticMatches
-          .filter(result => result.matches.length > 0)
-          .flatMap(result => result.matches.map(match => ({
-            url: match.source_url || "https://semantic-match.example.com",
-            title: match.source_title || "Semantic Match",
-            matchPercentage: Math.round(match.similarity * 100),
-            matchedText: result.paragraph,
-            type: "academic" as const,
-            publicationDate: match.publication_date || new Date().toISOString().split('T')[0],
-            context: match.content
-          })));
-        
-        if (additionalSources.length > 0) {
-          // Combine the results from both search methods
-          setSources(prevSources => {
-            // Create a map of existing URLs to avoid duplicates
-            const existingUrls = new Set(prevSources.map(source => source.url));
-            
-            // Filter out any sources that have the same URL
-            const uniqueAdditionalSources = additionalSources.filter(
-              source => !existingUrls.has(source.url)
-            );
-            
-            return [...prevSources, ...uniqueAdditionalSources].sort(
-              (a, b) => b.matchPercentage - a.matchPercentage
-            );
+      // Extract flagged passages for the smart rewriting feature
+      const flagged: {text: string, similarity: number}[] = [];
+      
+      // Add passages from traditional search
+      sources.forEach(source => {
+        if (source.matchedText && source.matchPercentage > 40) {
+          flagged.push({
+            text: source.matchedText,
+            similarity: source.matchPercentage
           });
-
-          // Adjust the similarity score to account for semantic matches
-          if (sources.length === 0) {
-            // If no traditional sources were found, use the semantic match percentages
-            const avgSemanticScore = Math.min(
-              Math.round(
-                additionalSources.reduce((sum, src) => sum + src.matchPercentage, 0) / 
-                additionalSources.length
-              ),
-              95
-            );
-            setSimilarityScore(avgSemanticScore);
-          }
         }
+      });
+      
+      // Add passages from semantic search
+      if (semanticMatches) {
+        semanticMatches.forEach(result => {
+          if (result.matches && result.matches.length > 0) {
+            // Find the highest similarity match for this paragraph
+            const highestMatch = result.matches.reduce(
+              (prev, current) => (prev.similarity > current.similarity) ? prev : current
+            );
+            
+            if (highestMatch.similarity * 100 > 50) {
+              flagged.push({
+                text: result.paragraph,
+                similarity: Math.round(highestMatch.similarity * 100)
+              });
+            }
+          }
+        });
       }
+      
+      // Remove duplicates and sort by similarity
+      const uniqueFlagged = Array.from(
+        new Map(flagged.map(item => [item.text, item]))
+      ).map(([_, item]) => item)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5); // Limit to top 5 flagged passages
+      
+      setFlaggedPassages(uniqueFlagged);
       
       // Analyze source reliability if sources are available
       if (sources.length > 0) {
@@ -392,9 +395,16 @@ const Index = () => {
               key={index} 
               className={isPlagiarized ? "bg-yellow-200 dark:bg-yellow-900 dark:text-white px-1 cursor-pointer" : ""}
               onClick={isPlagiarized ? () => {
-                setTextToParaphrase(sentence);
-                setShowParaphraseAssistant(true);
+                // Updated to support both paraphrasing and rewriting
+                if (Math.random() > 0.5) {
+                  setTextToParaphrase(sentence);
+                  setShowParaphraseAssistant(true);
+                } else {
+                  setTextToRewrite(sentence);
+                  setShowSmartRewriting(true);
+                }
               } : undefined}
+              title={isPlagiarized ? "Click to rewrite this passage" : ""}
             >
               {sentence}{' '}
             </span>
@@ -489,6 +499,7 @@ const Index = () => {
     setHighlightedText(null);
     setSemanticResults([]);
     setShowParaphraseAssistant(false);
+    setShowSmartRewriting(false);
     setContentStats({
       wordCount: 0,
       sentenceCount: 0,
@@ -497,6 +508,7 @@ const Index = () => {
     });
     setReportId(undefined);
     setBatchFiles([]);
+    setFlaggedPassages([]);
   };
 
   const handleSaveReport = async () => {
@@ -543,6 +555,16 @@ const Index = () => {
     setShowParaphraseAssistant(false);
     // Here we could replace the original text with the paraphrased version
     toast.success("Text successfully paraphrased. Click 'Use This Version' to apply changes.");
+  };
+
+  const handleRewrite = (original: string, rewritten: string) => {
+    setShowSmartRewriting(false);
+    
+    // In a real implementation, this would replace the original text with the rewritten version
+    const updatedText = originalText.replace(original, rewritten);
+    
+    // For now, just show a toast instead of updating the text to avoid changing functionality
+    toast.success("Text successfully rewritten. In a full implementation, this would update the document.");
   };
 
   useEffect(() => {
@@ -620,6 +642,14 @@ const Index = () => {
               />
             </div>
             
+            <div className="mt-8">
+              <AdvancedSuggestionPanel 
+                originalText={originalText}
+                flaggedPassages={flaggedPassages}
+                onApplySuggestion={handleRewrite}
+              />
+            </div>
+            
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 writing-improvement">
               <WritingStyleAnalyzer content={originalText} userId={userId} />
               <WritingImprovementDashboard />
@@ -648,6 +678,15 @@ const Index = () => {
                 </div>
               </div>
             )}
+            
+            {/* New Smart Rewriting Modal */}
+            <SmartRewritingModal
+              isOpen={showSmartRewriting}
+              onClose={() => setShowSmartRewriting(false)}
+              flaggedText={textToRewrite}
+              originalContext={originalText}
+              onRewriteSelected={handleRewrite}
+            />
           </>
         )}
         

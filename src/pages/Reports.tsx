@@ -4,14 +4,15 @@ import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/context/AuthContext';
-import { useSavedReports } from '@/hooks/use-saved-reports';
+import { usePlagiarismReports } from '@/hooks/use-plagiarism-reports';
 import FileUpload from '@/components/plagiarism/FileUpload';
 import BatchFileUpload from '@/components/plagiarism/BatchFileUpload';
 import { toast } from 'sonner';
 
 export default function Reports() {
   const { user } = useAuth();
-  const { reports, isLoading } = useSavedReports();
+  const { reports: reportsQuery, isLoading } = usePlagiarismReports();
+  const reports = reportsQuery.data || [];
   const [activeTab, setActiveTab] = useState('recent');
   
   const handleFileSelected = (file: File) => {
