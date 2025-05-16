@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
@@ -6,6 +5,11 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Number of retries for OpenAI API calls
+const MAX_RETRIES = 2;
+// Timeout for OpenAI API calls in milliseconds
+const API_TIMEOUT_MS = 30000;
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -17,6 +21,7 @@ serve(async (req) => {
     const reqBody = await req.json().catch(() => null);
     const { text, flaggedSources = [], options = {} } = reqBody || {};
     
+    // Input validation
     if (!text || typeof text !== 'string' || text.trim() === '') {
       return new Response(
         JSON.stringify({ error: 'Text is required and must be a non-empty string' }),
@@ -28,7 +33,7 @@ serve(async (req) => {
     const openAiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAiKey) {
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured' }),
+        JSON.stringify({ error: 'OpenAI API key not configured', errorType: 'configuration' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
@@ -43,10 +48,12 @@ serve(async (req) => {
       passages.push(text);
     }
 
-    // Limit text length to avoid excessive API usage
+    // Limit text length to avoid excessive API usage and potential timeouts
     const processedPassages = passages.map(passage => 
       passage.length > 2000 ? passage.substring(0, 2000) + "..." : passage
     );
+
+    console.log(`Processing ${processedPassages.length} passages for rewriting`);
 
     // Generate rewriting suggestions for each passage
     const suggestions = await generateRewritingSuggestions(
@@ -56,6 +63,8 @@ serve(async (req) => {
       openAiKey
     );
 
+    console.log(`Successfully generated ${suggestions.length} suggestions`);
+
     return new Response(
       JSON.stringify({ suggestions }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -64,15 +73,38 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in smart content rewriting function:', error);
     
+    // Provide a more descriptive error message to help with debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    const errorType = errorMessage.toLowerCase().includes('timeout') ? 'timeout' : 
+                      errorMessage.toLowerCase().includes('rate') ? 'rate_limit' :
+                      'execution_error';
+    
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-        errorDetail: error instanceof Error ? error.stack : undefined
+        error: errorMessage,
+        errorType,
+        errorDetail: errorStack,
+        suggestion: getErrorSuggestion(errorType)
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }
 });
+
+// Helper function to provide useful error suggestions
+function getErrorSuggestion(errorType: string): string {
+  switch (errorType) {
+    case 'timeout':
+      return 'The request timed out. Try submitting a smaller text passage or try again later.';
+    case 'rate_limit':
+      return 'Rate limit exceeded. Please wait a moment before trying again.';
+    case 'configuration':
+      return 'There is a configuration issue with the API key. Please contact support.';
+    default:
+      return 'An unexpected error occurred. Please try again or contact support if the problem persists.';
+  }
+}
 
 // Helper function to extract passages that likely need rewriting
 function extractPassagesForRewriting(text: string): string[] {
@@ -126,15 +158,20 @@ async function generateRewritingSuggestions(
   const limitedPassages = passages.slice(0, 3);
   
   try {
+    console.log(`Starting to process ${limitedPassages.length} passages with style ${style}`);
+    
     // Process each passage in parallel with error handling
     const suggestionPromises = limitedPassages.map(passage => 
       generateSuggestion(passage, style, purpose, preserveKeyTerms, academicDiscipline, targetReadingLevel, apiKey)
-        .catch(error => ({
-          original: passage,
-          rewritten: "Error generating suggestion",
-          explanation: `Error: ${error.message}`,
-          error: true
-        }))
+        .catch(error => {
+          console.error(`Error processing passage: ${error.message}`);
+          return {
+            original: passage,
+            rewritten: "Error generating suggestion. Please try again.",
+            explanation: `Error: ${error.message}`,
+            error: true
+          };
+        })
     );
     
     return await Promise.all(suggestionPromises);
@@ -154,28 +191,30 @@ async function generateSuggestion(
   targetReadingLevel: string,
   apiKey: string
 ): Promise<any> {
-  try {
-    // Style-specific instructions
-    const styleInstructions = getStyleInstructions(style);
-    
-    // Purpose-specific instructions
-    const purposeInstructions = getPurposeInstructions(purpose);
-    
-    // Reading level instructions
-    const readingLevelInstructions = getReadingLevelInstructions(targetReadingLevel);
-    
-    const disciplineNote = academicDiscipline 
-      ? `This is for the academic discipline of ${academicDiscipline}.` 
-      : '';
-    
-    const keyTermsNote = preserveKeyTerms 
-      ? "Preserve key terms, proper nouns, and essential discipline-specific terminology." 
-      : "Feel free to use synonyms for all terms to maximize originality.";
+  // Implement retry logic
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      // Style-specific instructions
+      const styleInstructions = getStyleInstructions(style);
       
-    const systemPrompt = `You are an expert academic writer and editor specializing in helping users rewrite content to avoid plagiarism while maintaining academic integrity. ${disciplineNote}`;
-    
-    const userPrompt = `Please rewrite the following text passage:
-    
+      // Purpose-specific instructions
+      const purposeInstructions = getPurposeInstructions(purpose);
+      
+      // Reading level instructions
+      const readingLevelInstructions = getReadingLevelInstructions(targetReadingLevel);
+      
+      const disciplineNote = academicDiscipline 
+        ? `This is for the academic discipline of ${academicDiscipline}.` 
+        : '';
+      
+      const keyTermsNote = preserveKeyTerms 
+        ? "Preserve key terms, proper nouns, and essential discipline-specific terminology." 
+        : "Feel free to use synonyms for all terms to maximize originality.";
+        
+      const systemPrompt = `You are an expert academic writer and editor specializing in helping users rewrite content to avoid plagiarism while maintaining academic integrity. ${disciplineNote}`;
+      
+      const userPrompt = `Please rewrite the following text passage:
+      
 "${passage}"
 
 Instructions:
@@ -189,55 +228,92 @@ Please structure your response in this format:
 
 Explanation: [Brief explanation of changes made]"`;
 
-    // Call OpenAI API with error handling and timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini", // Using the modern, more efficient model
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000,
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`OpenAI API error: ${errorData.error?.message || JSON.stringify(errorData) || 'Unknown error'}`);
-      }
-
-      const responseData = await response.json();
-      const aiResponse = responseData.choices[0].message?.content || "";
+      // Call OpenAI API with error handling and timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
       
-      // Extract rewritten content and explanation
-      const result = parseResponse(aiResponse, passage);
-      return {
-        original: passage,
-        ...result
-      };
-    } finally {
-      clearTimeout(timeoutId);
+      try {
+        console.log(`Attempt ${attempt + 1} for passage of length ${passage.length}`);
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMessage = errorData.error?.message || JSON.stringify(errorData) || 'Unknown error';
+          
+          // Check if we should retry based on error type
+          if (attempt < MAX_RETRIES && shouldRetry(errorMessage)) {
+            console.log(`Retrying due to error: ${errorMessage}`);
+            // Exponential backoff
+            await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+            continue;
+          }
+          
+          throw new Error(`OpenAI API error: ${errorMessage}`);
+        }
+
+        const responseData = await response.json();
+        const aiResponse = responseData.choices[0].message?.content || "";
+        
+        // Extract rewritten content and explanation
+        const result = parseResponse(aiResponse, passage);
+        return {
+          original: passage,
+          ...result
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    } catch (error) {
+      // On final attempt, throw the error
+      if (attempt >= MAX_RETRIES || !shouldRetry(error.message)) {
+        console.error(`All ${MAX_RETRIES + 1} attempts failed for passage`);
+        throw error;
+      }
+      
+      // Otherwise wait and retry
+      const delay = 1000 * Math.pow(2, attempt);
+      console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms: ${error.message}`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-  } catch (error) {
-    console.error(`Error processing passage: ${error}`);
-    if (error.name === 'AbortError') {
-      throw new Error('Request timed out');
-    }
-    throw error;
   }
+  
+  // This should never be reached due to the throw in the catch block
+  throw new Error("All retry attempts failed");
+}
+
+function shouldRetry(errorMessage: string): boolean {
+  const retriableErrors = [
+    'rate limit',
+    'timeout',
+    'capacity',
+    'overloaded',
+    'server error',
+    'try again',
+    '5',
+    'unavailable'
+  ];
+  
+  const errorLower = errorMessage.toLowerCase();
+  return retriableErrors.some(e => errorLower.includes(e));
 }
 
 // Helper functions for instructions
@@ -332,8 +408,6 @@ function parseResponse(aiResponse: string, originalText: string): { rewritten: s
 
 // Calculate a simple similarity reduction estimate
 function calculateApproximateSimilarityReduction(original: string, rewritten: string): number {
-  // This is a simple approximation algorithm
-  // In production, a more sophisticated algorithm or embedding comparison would be used
   try {
     const originalWords = new Set(original.toLowerCase().split(/\s+/).filter(w => w.length > 3));
     const rewrittenWords = new Set(rewritten.toLowerCase().split(/\s+/).filter(w => w.length > 3));

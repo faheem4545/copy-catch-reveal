@@ -54,6 +54,13 @@ verify_jwt = true
 
 [[functions.smart-content-rewriting]]
 verify_jwt = true
+max_execution_time = 40
 
 [[functions.academic-rewriter]]
 verify_jwt = true
+max_execution_time = 30
+
+# Configure resource limits for production stability
+[functions]
+default_max_execution_time = 20
+
