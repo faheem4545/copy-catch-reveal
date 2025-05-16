@@ -60,7 +60,12 @@ max_execution_time = 40
 verify_jwt = true
 max_execution_time = 30
 
+[[functions.verify-openai]]
+verify_jwt = true
+
+[[functions.verify-google-cse]]
+verify_jwt = true
+
 # Configure resource limits for production stability
 [functions]
 default_max_execution_time = 20
-
