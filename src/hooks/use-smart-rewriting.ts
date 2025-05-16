@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -26,7 +26,9 @@ export function useSmartRewriting() {
   const [suggestions, setSuggestions] = useState<RewriteSuggestion[]>([]);
   const [error, setError] = useState<Error | null>(null);
 
-  const generateSmartRewritingSuggestions = async (
+  const clearSuggestions = useCallback(() => setSuggestions([]), []);
+
+  const generateSmartRewritingSuggestions = useCallback(async (
     text: string,
     flaggedSources: Array<{text: string, source?: string, similarity?: number}> = [],
     options: SmartRewriteOptions = {}
@@ -61,12 +63,14 @@ export function useSmartRewriting() {
         console.error("Error generating rewriting suggestions:", apiError);
         const error = new Error(`Failed to generate suggestions: ${apiError.message}`);
         setError(error);
+        toast.error("Failed to generate rewriting suggestions. Please try again later.");
         throw error;
       }
       
       if (!data || !Array.isArray(data.suggestions)) {
         const error = new Error("Invalid response format from rewriting function");
         setError(error);
+        toast.error("Received invalid data format from rewriting service.");
         throw error;
       }
       
@@ -94,14 +98,13 @@ export function useSmartRewriting() {
       console.error("Error in smart rewriting:", err);
       const errorObj = err instanceof Error ? err : new Error("Unknown error occurred");
       setError(errorObj);
-      toast.error("Failed to generate rewriting suggestions");
       return [];
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, []);
   
-  const generateAcademicRewrite = async (
+  const generateAcademicRewrite = useCallback(async (
     text: string,
     context: string = "",
     discipline: string = "general"
@@ -129,12 +132,14 @@ export function useSmartRewriting() {
         console.error("Error generating academic rewrite:", apiError);
         const error = new Error(`Failed to generate academic rewrite: ${apiError.message}`);
         setError(error);
+        toast.error("Failed to generate academic rewrite. Please try again later.");
         throw error;
       }
       
       if (!data || !data.rewritten) {
         const error = new Error("Invalid response format from academic rewriter function");
         setError(error);
+        toast.error("Received invalid data from academic rewriting service.");
         throw error;
       }
       
@@ -151,12 +156,11 @@ export function useSmartRewriting() {
       console.error("Error in academic rewriting:", err);
       const errorObj = err instanceof Error ? err : new Error("Unknown error occurred");
       setError(errorObj);
-      toast.error("Failed to generate academic rewrite");
       return null;
     } finally {
       setIsGenerating(false);
     }
-  };
+  }, []);
 
   return {
     generateSmartRewritingSuggestions,
@@ -164,6 +168,6 @@ export function useSmartRewriting() {
     suggestions,
     isGenerating,
     error,
-    clearSuggestions: () => setSuggestions([])
+    clearSuggestions
   };
 }

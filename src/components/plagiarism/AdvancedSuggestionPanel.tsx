@@ -92,7 +92,7 @@ const AdvancedSuggestionPanel: React.FC<AdvancedSuggestionPanelProps> = ({
           
           <TabsContent value="rewriter" className="mt-4">
             <SmartContentRewriter
-              initialText={selectedText || ""}
+              initialText={selectedText}
               originalContext={originalText}
               onRewriteSelected={handleRewriteSelected}
             />

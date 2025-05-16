@@ -51,3 +51,9 @@ verify_jwt = true
 
 [[functions.multilingual-plagiarism-check]]
 verify_jwt = true
+
+[[functions.smart-content-rewriting]]
+verify_jwt = true
+
+[[functions.academic-rewriter]]
+verify_jwt = true

@@ -5,33 +5,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSmartRewriting, RewriteSuggestion } from "@/hooks/use-smart-rewriting";
-import { Loader2, Sparkles, AcademicCap, FileEdit, Lightbulb } from "lucide-react";
+import { Loader2, Sparkles, BookOpen, FileEdit, Lightbulb } from "lucide-react";
 
 interface SmartContentRewriterProps {
-  flaggedPassage: string;
+  flaggedPassage?: string;
+  initialText?: string;
   originalContext?: string;
   onRewriteSelected: (original: string, rewritten: string) => void;
-  onClose: () => void;
+  onClose?: () => void;
   onError?: (message: string) => void;
   onLoadingChange?: (isLoading: boolean) => void;
 }
 
 const rewritingStyles = [
-  { id: "academic", label: "Academic", icon: <AcademicCap className="h-4 w-4" /> },
+  { id: "academic", label: "Academic", icon: <BookOpen className="h-4 w-4" /> },
   { id: "creative", label: "Creative", icon: <Sparkles className="h-4 w-4" /> },
   { id: "casual", label: "Casual", icon: <FileEdit className="h-4 w-4" /> },
   { id: "technical", label: "Technical", icon: <Lightbulb className="h-4 w-4" /> },
 ];
 
 const SmartContentRewriter: React.FC<SmartContentRewriterProps> = ({
-  flaggedPassage,
+  flaggedPassage = "",
+  initialText = "",
   originalContext = "",
   onRewriteSelected,
-  onClose,
+  onClose = () => {},
   onError,
   onLoadingChange
 }) => {
-  const [text, setText] = useState(flaggedPassage);
+  const [text, setText] = useState(initialText || flaggedPassage || "");
   const [selectedSuggestion, setSelectedSuggestion] = useState<RewriteSuggestion | null>(null);
   const [activeTab, setActiveTab] = useState("academic");
 
@@ -57,11 +59,13 @@ const SmartContentRewriter: React.FC<SmartContentRewriterProps> = ({
   }, [error, onError]);
 
   useEffect(() => {
-    if (flaggedPassage) {
-      setText(flaggedPassage);
-      generateRewritings();
+    if (initialText || flaggedPassage) {
+      setText(initialText || flaggedPassage);
+      if ((initialText || flaggedPassage).trim()) {
+        generateRewritings();
+      }
     }
-  }, [flaggedPassage]);
+  }, [initialText, flaggedPassage]);
 
   const generateRewritings = async () => {
     if (!text.trim()) return;
@@ -85,7 +89,7 @@ const SmartContentRewriter: React.FC<SmartContentRewriterProps> = ({
 
   const handleApplyRewrite = () => {
     if (selectedSuggestion) {
-      onRewriteSelected(flaggedPassage, selectedSuggestion.rewritten);
+      onRewriteSelected(text, selectedSuggestion.rewritten);
     }
   };
 
@@ -122,7 +126,7 @@ const SmartContentRewriter: React.FC<SmartContentRewriterProps> = ({
         <>
           <div className="bg-muted/50 p-4 rounded-md border">
             <h3 className="font-medium mb-2">Original Text:</h3>
-            <p className="text-muted-foreground">{flaggedPassage}</p>
+            <p className="text-muted-foreground">{text}</p>
           </div>
 
           {isGenerating ? (
