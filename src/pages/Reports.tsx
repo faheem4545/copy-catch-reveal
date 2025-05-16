@@ -11,8 +11,9 @@ import { toast } from 'sonner';
 
 export default function Reports() {
   const { user } = useAuth();
-  const { reports: reportsQuery, isLoading } = usePlagiarismReports();
-  const reports = reportsQuery.data || [];
+  const { reports, isSaving } = usePlagiarismReports();
+  const isLoading = reports.isLoading;
+  const reportsData = reports.data || [];
   const [activeTab, setActiveTab] = useState('recent');
   
   const handleFileSelected = (file: File) => {
@@ -37,9 +38,9 @@ export default function Reports() {
               <TabsContent value="recent" className="mt-6">
                 {isLoading ? (
                   <div className="p-8 text-center">Loading your reports...</div>
-                ) : reports && reports.length > 0 ? (
+                ) : reportsData && reportsData.length > 0 ? (
                   <div className="grid gap-4">
-                    {reports.slice(0, 5).map((report) => (
+                    {reportsData.slice(0, 5).map((report) => (
                       <Card key={report.id} className="hover:shadow-md transition-shadow">
                         <CardHeader className="pb-2">
                           <CardTitle>{report.title}</CardTitle>
@@ -78,9 +79,9 @@ export default function Reports() {
               <TabsContent value="all" className="mt-6">
                 {isLoading ? (
                   <div className="p-8 text-center">Loading your reports...</div>
-                ) : reports && reports.length > 0 ? (
+                ) : reportsData && reportsData.length > 0 ? (
                   <div className="grid gap-4">
-                    {reports.map((report) => (
+                    {reportsData.map((report) => (
                       <Card key={report.id} className="hover:shadow-md transition-shadow">
                         <CardHeader className="pb-2">
                           <CardTitle>{report.title}</CardTitle>

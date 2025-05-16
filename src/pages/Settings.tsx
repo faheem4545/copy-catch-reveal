@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { Sun, Moon, Laptop } from 'lucide-react';
 
 export default function Settings() {
   const { user } = useAuth();

@@ -32,7 +32,9 @@ export function useSmartRewriting() {
     options: SmartRewriteOptions = {}
   ): Promise<RewriteSuggestion[]> => {
     if (!text || text.trim() === '') {
-      toast.error("Please provide text to rewrite");
+      const error = new Error("Please provide text to rewrite");
+      toast.error(error.message);
+      setError(error);
       return [];
     }
     
@@ -41,7 +43,7 @@ export function useSmartRewriting() {
     
     try {
       // Call the edge function for smart rewriting
-      const { data, error } = await supabase.functions.invoke('smart-content-rewriting', {
+      const { data, error: apiError } = await supabase.functions.invoke('smart-content-rewriting', {
         body: { 
           text, 
           flaggedSources,
@@ -55,20 +57,43 @@ export function useSmartRewriting() {
         }
       });
       
-      if (error) {
-        console.error("Error generating rewriting suggestions:", error);
-        throw new Error(`Failed to generate suggestions: ${error.message}`);
+      if (apiError) {
+        console.error("Error generating rewriting suggestions:", apiError);
+        const error = new Error(`Failed to generate suggestions: ${apiError.message}`);
+        setError(error);
+        throw error;
       }
       
       if (!data || !Array.isArray(data.suggestions)) {
-        throw new Error("Invalid response format from rewriting function");
+        const error = new Error("Invalid response format from rewriting function");
+        setError(error);
+        throw error;
       }
       
-      setSuggestions(data.suggestions);
-      return data.suggestions;
+      // Add some validation to ensure we have properly formatted suggestions
+      const validatedSuggestions = data.suggestions.filter((suggestion: any) => 
+        suggestion && 
+        typeof suggestion.original === 'string' && 
+        typeof suggestion.rewritten === 'string'
+      );
+      
+      if (validatedSuggestions.length === 0 && data.suggestions.length > 0) {
+        const fallbackSuggestion: RewriteSuggestion = {
+          original: text,
+          rewritten: "Could not generate a specific rewrite. Please try again with different text.",
+          explanation: "The system encountered a processing issue with this text.",
+          similarityReduction: 0
+        };
+        setSuggestions([fallbackSuggestion]);
+        return [fallbackSuggestion];
+      }
+      
+      setSuggestions(validatedSuggestions);
+      return validatedSuggestions;
     } catch (err) {
       console.error("Error in smart rewriting:", err);
-      setError(err instanceof Error ? err : new Error("Unknown error occurred"));
+      const errorObj = err instanceof Error ? err : new Error("Unknown error occurred");
+      setError(errorObj);
       toast.error("Failed to generate rewriting suggestions");
       return [];
     } finally {
@@ -82,7 +107,9 @@ export function useSmartRewriting() {
     discipline: string = "general"
   ): Promise<RewriteSuggestion | null> => {
     if (!text || text.trim() === '') {
-      toast.error("Please provide text to rewrite");
+      const error = new Error("Please provide text to rewrite");
+      toast.error(error.message);
+      setError(error);
       return null;
     }
     
@@ -90,7 +117,7 @@ export function useSmartRewriting() {
     setError(null);
     
     try {
-      const { data, error } = await supabase.functions.invoke('academic-rewriter', {
+      const { data, error: apiError } = await supabase.functions.invoke('academic-rewriter', {
         body: { 
           text, 
           context,
@@ -98,13 +125,17 @@ export function useSmartRewriting() {
         }
       });
       
-      if (error) {
-        console.error("Error generating academic rewrite:", error);
-        throw new Error(`Failed to generate academic rewrite: ${error.message}`);
+      if (apiError) {
+        console.error("Error generating academic rewrite:", apiError);
+        const error = new Error(`Failed to generate academic rewrite: ${apiError.message}`);
+        setError(error);
+        throw error;
       }
       
       if (!data || !data.rewritten) {
-        throw new Error("Invalid response format from academic rewriter function");
+        const error = new Error("Invalid response format from academic rewriter function");
+        setError(error);
+        throw error;
       }
       
       const suggestion: RewriteSuggestion = {
@@ -118,7 +149,8 @@ export function useSmartRewriting() {
       return suggestion;
     } catch (err) {
       console.error("Error in academic rewriting:", err);
-      setError(err instanceof Error ? err : new Error("Unknown error occurred"));
+      const errorObj = err instanceof Error ? err : new Error("Unknown error occurred");
+      setError(errorObj);
       toast.error("Failed to generate academic rewrite");
       return null;
     } finally {
